@@ -1,0 +1,9 @@
+{
+  "name": "quanttrader-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File .\\scripts\\dev.ps1",
+    "setup": "powershell -ExecutionPolicy Bypass -File .\\scripts\\setup.ps1"
+  }
+}
