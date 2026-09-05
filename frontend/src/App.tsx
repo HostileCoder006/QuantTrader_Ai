@@ -5,11 +5,21 @@ import type { PortfolioSummary, Stock } from "./lib/types";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { BacktestPage } from "./pages/BacktestPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { JournalPage } from "./pages/JournalPage";
 import { MarketPage } from "./pages/MarketPage";
 import { PortfolioPage } from "./pages/PortfolioPage";
 import { ScannerPage } from "./pages/ScannerPage";
+import { StrategyLabPage } from "./pages/StrategyLabPage";
 
-export type Page = "dashboard" | "market" | "scanner" | "portfolio" | "analytics" | "backtest";
+export type Page =
+  | "dashboard"
+  | "market"
+  | "scanner"
+  | "portfolio"
+  | "analytics"
+  | "backtest"
+  | "journal"
+  | "strategylab";
 
 // Auto-refresh interval: 5 minutes (market data)
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -79,6 +89,10 @@ function App() {
         return <AnalyticsPage />;
       case "backtest":
         return <BacktestPage />;
+      case "journal":
+        return <JournalPage />;
+      case "strategylab":
+        return <StrategyLabPage />;
       default:
         return null;
     }

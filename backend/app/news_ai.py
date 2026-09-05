@@ -12,47 +12,54 @@ def fetch_news(symbol: str) -> list[dict]:
     if not stock:
         raise ValueError("Unknown NIFTY 50 symbol.")
 
+    demo_headlines = [
+        {
+            "title": f"{stock['name']} investors track earnings momentum and sector demand",
+            "source": "Demo News",
+            "url": "",
+        },
+        {
+            "title": f"Brokerages review {stock['name']} after recent market volatility",
+            "source": "Demo News",
+            "url": "",
+        },
+        {
+            "title": f"{stock['name']} outlook depends on margins, demand, and broader NIFTY trend",
+            "source": "Demo News",
+            "url": "",
+        },
+    ]
+
     if not NEWSAPI_KEY:
+        return demo_headlines
+
+    try:
+        response = requests.get(
+            "https://newsapi.org/v2/everything",
+            params={
+                "q": f"{stock['name']} stock India OR NSE",
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 5,
+                "apiKey": NEWSAPI_KEY,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        articles = response.json().get("articles", [])
         return [
             {
-                "title": f"{stock['name']} investors track earnings momentum and sector demand",
-                "source": "Demo News",
-                "url": "",
-            },
-            {
-                "title": f"Brokerages review {stock['name']} after recent market volatility",
-                "source": "Demo News",
-                "url": "",
-            },
-            {
-                "title": f"{stock['name']} outlook depends on margins, demand, and broader NIFTY trend",
-                "source": "Demo News",
-                "url": "",
-            },
+                "title": article.get("title", ""),
+                "source": (article.get("source") or {}).get("name", "NewsAPI"),
+                "url": article.get("url", ""),
+            }
+            for article in articles
+            if article.get("title")
         ]
-
-    response = requests.get(
-        "https://newsapi.org/v2/everything",
-        params={
-            "q": f"{stock['name']} stock India OR NSE",
-            "language": "en",
-            "sortBy": "publishedAt",
-            "pageSize": 5,
-            "apiKey": NEWSAPI_KEY,
-        },
-        timeout=15,
-    )
-    response.raise_for_status()
-    articles = response.json().get("articles", [])
-    return [
-        {
-            "title": article.get("title", ""),
-            "source": (article.get("source") or {}).get("name", "NewsAPI"),
-            "url": article.get("url", ""),
-        }
-        for article in articles
-        if article.get("title")
-    ]
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"NewsAPI fetch failed: {exc}. Falling back to demo headlines.")
+        return demo_headlines
 
 
 def _demo_sentiment(symbol: str, headlines: list[dict]) -> dict:
@@ -85,37 +92,42 @@ def analyze_sentiment(symbol: str) -> dict:
             "explanation": "2-3 concise lines, no price prediction",
         },
     }
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:5173",
-            "X-Title": "QuantTrader AI",
-        },
-        json={
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:5173",
+                "X-Title": "QuantTrader AI",
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a cautious equity news sentiment analyst. "
+                            "Do not predict stock prices. Return valid JSON only."
+                        ),
+                    },
+                    {"role": "user", "content": json.dumps(prompt)},
+                ],
+                "response_format": {"type": "json_object"},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+        return {
+            "headlines": headlines,
+            "classification": parsed.get("classification", "Neutral"),
+            "score": int(parsed.get("score", 0)),
+            "explanation": parsed.get("explanation", "No explanation returned."),
             "model": OPENROUTER_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a cautious equity news sentiment analyst. "
-                        "Do not predict stock prices. Return valid JSON only."
-                    ),
-                },
-                {"role": "user", "content": json.dumps(prompt)},
-            ],
-            "response_format": {"type": "json_object"},
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(content)
-    return {
-        "headlines": headlines,
-        "classification": parsed.get("classification", "Neutral"),
-        "score": int(parsed.get("score", 0)),
-        "explanation": parsed.get("explanation", "No explanation returned."),
-        "model": OPENROUTER_MODEL,
-    }
+        }
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"OpenRouter sentiment analysis failed: {exc}. Falling back to demo data.")
+        return {"headlines": headlines, **_demo_sentiment(symbol, headlines)}

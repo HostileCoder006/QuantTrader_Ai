@@ -3,6 +3,13 @@ Quantitative Signal Engine
 --------------------------
 All signals are derived from deterministic technical indicators.
 No AI or ML is involved in signal generation.
+
+Pipeline (generate_signal):
+  1. Fetch OHLCV → compute indicators
+  2. Fetch market regime → apply score adjustment
+  3. Score indicators → derive signal label
+  4. NO_TRADE override when regime is NO_TRADE and score < 40
+  5. Log recommendation to journal (non-blocking, best-effort)
 """
 from __future__ import annotations
 
@@ -227,6 +234,11 @@ def _score_to_signal(score: int) -> dict:
     return {"signal": "Strong Sell", "confidence": "High"}
 
 
+def _no_trade_signal() -> dict:
+    """Signal returned when regime conditions make trading inadvisable."""
+    return {"signal": "No Trade", "confidence": "High"}
+
+
 def _calc_targets(current_price: float, atr: float) -> dict:
     """ATR-based entry, target, and stop-loss levels."""
     if atr <= 0:
@@ -321,20 +333,32 @@ def compute_indicators(symbol: str) -> dict:
     }
 
 
-def generate_signal(symbol: str, sentiment_score: int | None = None) -> dict:
+def generate_signal(
+    symbol: str,
+    sentiment_score: int | None = None,
+    log_to_journal: bool = False,
+    sentiment_data: dict | None = None,
+) -> dict:
     """
     Generate a full quantitative trading signal for a symbol.
 
+    Steps:
+      1. Compute technical indicators from OHLCV.
+      2. Fetch current market regime (cached, 5-min TTL).
+      3. Apply regime score adjustment.
+      4. Override to NO_TRADE if regime is NO_TRADE and score < 40.
+      5. Compute ATR targets.
+      6. Optionally log to recommendation journal.
+
     Returns:
         symbol, name, signal, confidence, score, score_breakdown,
-        indicators (rsi, macd, vwap, ema20, ema50, atr, volume_change, daily_momentum),
-        targets (entry, target, stop_loss, risk_reward),
-        risk (Low/Medium/High)
+        indicators, targets, risk, regime_context, data_source
     """
     indicators = compute_indicators(symbol)
     stock = stock_by_symbol(symbol)
     sector = stock.get("sector", "Unknown") if stock else "Unknown"
 
+    # ── Step 1: base score from indicators ──
     score, breakdown = _score_indicators(
         current_price=indicators["current_price"],
         vwap=indicators["vwap"],
@@ -346,16 +370,37 @@ def generate_signal(symbol: str, sentiment_score: int | None = None) -> dict:
         ema50=indicators["ema50"],
     )
 
-    signal_info = _score_to_signal(score)
+    # ── Step 2: fetch regime (non-blocking) ──
+    regime_context: dict = {}
+    try:
+        from .regime import get_market_regime  # lazy import avoids circular
+        regime_context = get_market_regime(use_cache_seconds=300)
+    except Exception as exc:
+        logger.warning("Regime fetch failed for %s: %s", symbol, exc)
+
+    # ── Step 3: apply regime score adjustment ──
+    regime_adj = int(regime_context.get("score_adjustment", 0))
+    raw_score = score
+    score = max(0, min(100, score + regime_adj))
+    breakdown["regime_adjustment"] = regime_adj
+
+    # ── Step 4: determine signal label ──
+    regime_name = regime_context.get("regime", "NEUTRAL")
+    if regime_name == "NO_TRADE" and raw_score < 40:
+        signal_info = _no_trade_signal()
+    else:
+        signal_info = _score_to_signal(score)
+
     targets = _calc_targets(indicators["current_price"], indicators["atr"])
 
-    return {
+    result = {
         "symbol": symbol,
         "name": indicators.get("name", symbol),
         "sector": sector,
         "signal": signal_info["signal"],
         "confidence": signal_info["confidence"],
         "score": score,
+        "raw_score": raw_score,
         "score_breakdown": breakdown,
         "indicators": {
             "rsi": indicators["rsi"],
@@ -370,5 +415,22 @@ def generate_signal(symbol: str, sentiment_score: int | None = None) -> dict:
         },
         "targets": targets,
         "risk": _risk_label(score),
+        "regime_context": {
+            "regime": regime_name,
+            "score_adjustment": regime_adj,
+            "volatility_20d": regime_context.get("volatility_20d"),
+            "rsi": regime_context.get("rsi"),
+            "data_available": regime_context.get("data_available", False),
+        },
         "data_source": indicators.get("source", "unknown"),
     }
+
+    # ── Step 5: optional journal logging ──
+    if log_to_journal:
+        try:
+            from .journal import log_recommendation  # lazy import
+            log_recommendation(result, regime=regime_context, sentiment=sentiment_data)
+        except Exception as exc:
+            logger.warning("Journal log failed for %s: %s", symbol, exc)
+
+    return result

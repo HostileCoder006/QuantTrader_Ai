@@ -18,6 +18,7 @@ def get_connection():
 
 def init_database() -> None:
     with get_connection() as db:
+        # ── Original tables ────────────────────────────────────────────────
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -54,6 +55,124 @@ def init_database() -> None:
                 "INSERT INTO users (id, virtual_balance) VALUES (1, ?)",
                 (STARTING_BALANCE,),
             )
+
+        # ── New tables (safe migrations — CREATE IF NOT EXISTS) ────────────
+
+        # 1. Market regime history
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_regime (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp        TEXT    NOT NULL,
+                regime           TEXT    NOT NULL,
+                nifty_value      REAL,
+                ema20            REAL,
+                ema50            REAL,
+                ema200           REAL,
+                rsi              REAL,
+                volatility_20d   REAL,
+                score_adjustment INTEGER NOT NULL DEFAULT 0,
+                details_json     TEXT
+            )
+            """
+        )
+
+        # 2. Recommendation journal
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS recommendation_journal (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol          TEXT    NOT NULL,
+                timestamp       TEXT    NOT NULL,
+                signal          TEXT    NOT NULL,
+                confidence      TEXT    NOT NULL,
+                score           INTEGER NOT NULL,
+                price_at_signal REAL,
+                indicators_json TEXT,
+                sentiment_json  TEXT,
+                regime          TEXT,
+                target          REAL,
+                stop_loss       REAL,
+                data_source     TEXT
+            )
+            """
+        )
+
+        # 3. Journal outcomes (forward return tracking)
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS journal_outcomes (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                journal_id      INTEGER NOT NULL REFERENCES recommendation_journal(id),
+                outcome_period  INTEGER NOT NULL,
+                price_at_outcome REAL,
+                return_pct      REAL,
+                vs_nifty_return REAL,
+                outcome_date    TEXT,
+                computed_at     TEXT
+            )
+            """
+        )
+
+        # 4. News sentiment cache (avoid re-sending same headlines to DeepSeek)
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS news_cache (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol         TEXT NOT NULL,
+                cache_key      TEXT NOT NULL,
+                headlines_json TEXT,
+                sentiment_json TEXT,
+                fetched_at     TEXT NOT NULL,
+                UNIQUE(symbol, cache_key)
+            )
+            """
+        )
+
+        # 5. News → price reaction tracker
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS news_price_reactions (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol           TEXT NOT NULL,
+                article_hash     TEXT NOT NULL UNIQUE,
+                headline         TEXT,
+                sentiment_score  INTEGER,
+                sentiment_class  TEXT,
+                price_at_news    REAL,
+                price_1d         REAL,
+                price_5d         REAL,
+                price_20d        REAL,
+                return_1d        REAL,
+                return_5d        REAL,
+                return_20d       REAL,
+                recorded_at      TEXT NOT NULL,
+                resolved_1d_at   TEXT,
+                resolved_5d_at   TEXT,
+                resolved_20d_at  TEXT
+            )
+            """
+        )
+
+        # Indexes for common query patterns
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_regime_ts ON market_regime(timestamp DESC)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_journal_symbol ON recommendation_journal(symbol)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_journal_ts ON recommendation_journal(timestamp DESC)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_outcomes_jid ON journal_outcomes(journal_id)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reactions_symbol ON news_price_reactions(symbol)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_news_cache_key ON news_cache(symbol, cache_key)"
+        )
 
 
 def get_balance() -> float:

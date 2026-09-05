@@ -192,3 +192,233 @@ export type MarketBrief = {
   model: string;
   nifty: NiftyIndex;
 };
+
+// ─── Market Regime ─────────────────────────────────────────────────────────
+
+export type RegimeName =
+  | "BULLISH"
+  | "BEARISH"
+  | "NEUTRAL"
+  | "HIGH_VOLATILITY"
+  | "NO_TRADE";
+
+export type MarketRegime = {
+  regime: RegimeName;
+  nifty_price: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  rsi: number | null;
+  volatility_20d: number | null;
+  score_adjustment: number;
+  details: Record<string, string | number>;
+  data_available: boolean;
+  cached_at?: string;
+};
+
+export type RegimeHistoryEntry = {
+  timestamp: string;
+  regime: RegimeName;
+  nifty_value: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  rsi: number | null;
+  volatility_20d: number | null;
+  score_adjustment: number;
+};
+
+// ─── Historical Pattern Search ─────────────────────────────────────────────
+
+export type HorizonStats = {
+  data_available: boolean;
+  sample_size?: number;
+  win_rate?: number;
+  avg_return?: number;
+  median_return?: number;
+  best_return?: number;
+  worst_return?: number;
+  std_return?: number;
+};
+
+export type PatternMatch = {
+  date: string;
+  price: number;
+  similarity: number;
+  distance: number;
+  rsi: number;
+  macd_hist: number;
+  price_vs_ema50_pct: number;
+  volume_vs_avg_pct: number;
+  return_5d: number | null;
+  return_20d: number | null;
+  return_60d: number | null;
+};
+
+export type PatternSearchResult = {
+  symbol: string | null;
+  similar_count: number;
+  history_days: number;
+  history_start: string | null;
+  history_end: string | null;
+  current_features: Record<string, number>;
+  horizon_stats: {
+    "5d"?: HorizonStats;
+    "20d"?: HorizonStats;
+    "60d"?: HorizonStats;
+  };
+  matches: PatternMatch[];
+  data_available: boolean;
+  message: string;
+};
+
+// ─── Recommendation Journal ────────────────────────────────────────────────
+
+export type JournalOutcome = {
+  price: number;
+  return_pct: number;
+  vs_nifty: number | null;
+  date: string;
+};
+
+export type JournalEntry = {
+  id: number;
+  symbol: string;
+  timestamp: string;
+  signal: string;
+  confidence: string;
+  score: number;
+  price_at_signal: number;
+  regime: string;
+  target: number | null;
+  stop_loss: number | null;
+  data_source: string;
+  indicators: Record<string, unknown>;
+  sentiment: { classification?: string; score?: number };
+  outcomes: {
+    "1d"?: JournalOutcome;
+    "5d"?: JournalOutcome;
+    "20d"?: JournalOutcome;
+    "60d"?: JournalOutcome;
+  };
+};
+
+export type HorizonStat = {
+  data_available: boolean;
+  sample_size: number;
+  win_rate?: number;
+  avg_return?: number;
+  median_return?: number;
+  best_return?: number;
+  worst_return?: number;
+  avg_alpha?: number;
+  by_signal?: Record<string, { count: number; win_rate: number; avg_return: number }>;
+};
+
+export type JournalStats = {
+  total_recommendations: number;
+  by_signal: Record<string, number>;
+  horizon_stats: {
+    "1d": HorizonStat;
+    "5d": HorizonStat;
+    "20d": HorizonStat;
+    "60d": HorizonStat;
+  };
+  max_drawdown_5d: number;
+};
+
+// ─── News → Price Reactions ────────────────────────────────────────────────
+
+export type SentimentTrendPoint = {
+  date: string;
+  score: number;
+  class: "Bullish" | "Neutral" | "Bearish";
+};
+
+export type ReactionClassStats = {
+  count: number;
+  avg_return: number;
+  win_rate: number;
+};
+
+export type NewsReactionStats = {
+  symbol: string;
+  data_available: boolean;
+  total_events?: number;
+  resolved_events?: number;
+  sentiment_trend: SentimentTrendPoint[];
+  avg_sentiment_7d: number | null;
+  avg_sentiment_30d: number | null;
+  reaction_stats: {
+    "1d"?: { data_available: boolean; sample_size: number; by_sentiment_class: Record<string, ReactionClassStats> };
+    "5d"?: { data_available: boolean; sample_size: number; by_sentiment_class: Record<string, ReactionClassStats> };
+    "20d"?: { data_available: boolean; sample_size: number; by_sentiment_class: Record<string, ReactionClassStats> };
+  };
+  divergence: { type: string; note: string } | null;
+  message: string;
+};
+
+// ─── Strategy Lab ──────────────────────────────────────────────────────────
+
+export type StrategyLabResult = {
+  symbol: string;
+  stock_name: string;
+  period: string;
+  total_return: number;
+  cagr: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown: number;
+  win_rate: number;
+  total_trades: number;
+  profit_factor: number;
+  equity_curve: number[];
+  equity_curve_abs: number[];
+  best_trade: number;
+  worst_trade: number;
+  avg_days_held: number;
+  benchmark_return: number;
+  alpha: number;
+  trade_log: {
+    entry_price: number;
+    exit_price: number;
+    return_pct: number;
+    days_held: number;
+    entry_date: string;
+    exit_date: string;
+  }[];
+  config_used: Record<string, unknown>;
+};
+
+// ─── Extended Signal (with regime context) ─────────────────────────────────
+
+export type RegimeContext = {
+  regime: RegimeName;
+  score_adjustment: number;
+  volatility_20d: number | null;
+  rsi: number | null;
+  data_available: boolean;
+};
+
+export type EnrichedSignal = Signal & {
+  raw_score: number;
+  regime_context: RegimeContext;
+};
+
+export type EnrichedSignalWithExplanation = EnrichedSignal & {
+  ai_explanation: {
+    recommendation_summary: string;
+    supporting_evidence: string;
+    contradictions: string;
+    regime_context: string;
+    pattern_context: string;
+    risk_assessment: string;
+    trade_rationale: string;
+    confidence_commentary: string;
+    model: string;
+  };
+  pattern_context: PatternSearchResult | null;
+};
+
+export type ScannerResultWithRegime = ScannerResult & {
+  regime: MarketRegime | null;
+};
