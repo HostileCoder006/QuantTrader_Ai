@@ -1,6 +1,7 @@
 import type {
   Analytics,
   BacktestResult,
+  CommitteeMode,
   EnrichedSignalWithExplanation,
   JournalEntry,
   JournalStats,
@@ -8,16 +9,22 @@ import type {
   MarketRegime,
   NewsReactionStats,
   NiftyIndex,
+  OpportunityCommitteeResult,
+  OpportunityHorizon,
+  OpportunityScanResult,
+  OpportunitySelfEval,
   PatternSearchResult,
   PortfolioIntelligence,
   PortfolioSummary,
   RegimeHistoryEntry,
   RiskMetrics,
+  RiskProfile,
   ScannerResultWithRegime,
   Sentiment,
   Signal,
   SignalWithExplanation,
   Stock,
+  StrategyLabChartData,
   StrategyLabResult,
   Transaction,
 } from "./types";
@@ -95,6 +102,13 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  strategyLabChart: (payload: Record<string, unknown>) =>
+    request<StrategyLabChartData>("/api/strategy-lab/chart", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+
   // ── Trading ───────────────────────────────────────────────────────────────
   trade: (payload: {
     stock_symbol: string;
@@ -107,6 +121,38 @@ export const api = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
     }),
+
+  // ── Short-Term Opportunity Scanner ────────────────────────────────────────
+  opportunityScan: (payload: {
+    horizon: OpportunityHorizon;
+    risk_profile: RiskProfile;
+    include_pattern?: boolean;
+  }) =>
+    request<OpportunityScanResult>("/api/opportunity/scan", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+
+  opportunityCommittee: (payload: {
+    scan_result: OpportunityScanResult;
+    mode: CommitteeMode;
+  }) =>
+    request<OpportunityCommitteeResult>("/api/opportunity/committee", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+
+  opportunitySaveRec: (payload: Record<string, unknown>) =>
+    request<{ status: string }>("/api/opportunity/save-recommendation", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+
+  opportunitySelfEval: () =>
+    request<OpportunitySelfEval>("/api/opportunity/self-eval"),
 };
 
 export const formatINR = (value: number) =>

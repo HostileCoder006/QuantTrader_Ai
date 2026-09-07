@@ -40,6 +40,7 @@ export type PortfolioSummary = {
   holdings: Holding[];
   // Intelligence fields
   health_score: number;
+  no_holdings: boolean;
   diversification_score: number;
   cash_utilization: number;
   sector_concentration: Record<string, number>;
@@ -359,6 +360,39 @@ export type NewsReactionStats = {
 
 // ─── Strategy Lab ──────────────────────────────────────────────────────────
 
+export type StrategyLabChartData = {
+  symbol: string;
+  stock_name: string;
+  period: string;
+  bars: number;
+  dates: string[];
+  ohlcv: {
+    open: (number | null)[];
+    high: (number | null)[];
+    low: (number | null)[];
+    close: (number | null)[];
+    volume: number[];
+  };
+  rsi: {
+    values: (number | null)[];
+    period: number;
+    ob_level: number;
+    os_level: number;
+  };
+  macd: {
+    macd: (number | null)[];
+    signal: (number | null)[];
+    histogram: (number | null)[];
+    fast: number;
+    slow: number;
+    signal_span: number;
+  };
+  trade_signals: {
+    buy: { date: string; price: number }[];
+    sell: { date: string; price: number }[];
+  };
+};
+
 export type StrategyLabResult = {
   symbol: string;
   stock_name: string;
@@ -421,4 +455,200 @@ export type EnrichedSignalWithExplanation = EnrichedSignal & {
 
 export type ScannerResultWithRegime = ScannerResult & {
   regime: MarketRegime | null;
+};
+
+// ─── Short-Term Opportunity Scanner ────────────────────────────────────────
+
+export type OpportunityHorizon = "1-5d" | "1-2w" | "2-4w" | "1-3m";
+export type RiskProfile = "conservative" | "balanced" | "aggressive";
+export type CommitteeMode = "quick" | "standard" | "deep";
+
+export type OpportunityFactorScores = {
+  momentum:    number;
+  macd:        number;
+  rsi:         number;
+  volume:      number;
+  vwap:        number;
+  trend:       number;
+  risk_reward: number;
+  sector:      number;
+};
+
+export type OpportunityPatternStat = {
+  data_available: boolean;
+  sample_size?:   number;
+  win_rate?:      number;
+  avg_return?:    number;
+  median_return?: number;
+  best_return?:   number;
+  worst_return?:  number;
+  std_return?:    number;
+};
+
+export type OpportunityPattern = {
+  data_available:  boolean;
+  symbol?:         string;
+  similar_setups?: number;
+  history_years?:  number;
+  primary_horizon?: string;
+  primary_stat?:   OpportunityPatternStat;
+  all_horizons?:   Record<string, OpportunityPatternStat>;
+  message?:        string;
+};
+
+export type OpportunityCandidate = {
+  // identity
+  symbol:           string;
+  name:             string;
+  sector:           string;
+  rank:             number;
+  // price
+  current_price:    number;
+  daily_momentum:   number;
+  atr:              number;
+  atr_pct:          number;
+  // indicators
+  rsi:              number;
+  macd:             { macd: number; signal: number; histogram: number; crossover: string };
+  vwap:             number;
+  ema20:            number;
+  ema50:            number;
+  volume_change:    number;
+  // scoring
+  opportunity_score:    number;
+  factor_scores:        OpportunityFactorScores;
+  confidence:           number;
+  risk_label:           "Low" | "Medium" | "High";
+  // targets
+  entry:            number;
+  target:           number;
+  stop_loss:        number;
+  risk_reward:      number;
+  estimated_return_lo: number;
+  estimated_return_hi: number;
+  // historical
+  pattern:          OpportunityPattern;
+  // meta
+  data_source:      string;
+};
+
+export type OpportunityRegime = {
+  regime:           string;
+  rsi:              number | null;
+  volatility_20d:   number | null;
+  score_adjustment: number;
+  data_available:   boolean;
+};
+
+export type OpportunityScanResult = {
+  scan_id:           string;
+  horizon:           OpportunityHorizon;
+  horizon_label:     string;
+  risk_profile:      RiskProfile;
+  regime:            OpportunityRegime;
+  scanned_at:        string;
+  candidates:        OpportunityCandidate[];
+  top_for_committee: string[];
+  total_scanned:     number;
+  sector_strength:   Record<string, number>;
+  message:           string;
+};
+
+// Committee types
+export type AnalystResult = {
+  analyst:        string;
+  role:           string;
+  recommendation: "BUY" | "HOLD" | "SELL";
+  confidence:     number;
+  thesis:         string;
+  evidence:       string[];
+  risks:          string[];
+  invalidation:   string;
+  model:          string;
+};
+
+export type DebateResult = {
+  bull_case:     string;
+  bear_case:     string;
+  bull_rebuttal: string;
+  bear_rebuttal: string;
+  key_tension:   string;
+  model:         string;
+};
+
+export type CommitteeSynthesis = {
+  final_recommendation: "BUY" | "HOLD" | "SELL";
+  conviction:           "HIGH" | "MEDIUM" | "LOW";
+  consensus_score:      number;
+  thesis:               string;
+  strongest_bull:       string;
+  strongest_bear:       string;
+  key_risks:            string[];
+  conditions_to_watch:  string[];
+  disclaimer:           string;
+  model:                string;
+};
+
+export type CommitteeStockResult = {
+  symbol:            string;
+  name:              string;
+  sector:            string;
+  opportunity_score: number;
+  rank:              number;
+  analyst_results:   AnalystResult[];
+  debate:            DebateResult | null;
+  synthesis:         CommitteeSynthesis;
+  vote_summary:      { buy: number; hold: number; sell: number };
+};
+
+export type QuickCommitteeResult = {
+  mode:           "quick";
+  rankings:       {
+    rank: number;
+    symbol: string;
+    recommendation: "BUY" | "HOLD" | "SELL";
+    confidence: number;
+    one_line_thesis: string;
+    key_risk: string;
+  }[];
+  market_comment: string;
+  disclaimer:     string;
+  model:          string;
+};
+
+export type OpportunityCommitteeResult = OpportunityScanResult & {
+  committee:      CommitteeStockResult[] | QuickCommitteeResult;
+  committee_mode: CommitteeMode;
+};
+
+export type OpportunitySelfEvalSummary = {
+  total_logged:   number;
+  resolved:       number;
+  accuracy_pct:   number | null;
+  avg_return_pct: number | null;
+  note:           string;
+};
+
+export type OpportunitySelfEval = {
+  recommendations: {
+    id:                  number;
+    scan_id:             string;
+    symbol:              string;
+    rank:                number;
+    horizon:             string;
+    risk_profile:        string;
+    opportunity_score:   number;
+    committee_rec:       string | null;
+    committee_conviction: string | null;
+    predicted_lo:        number | null;
+    predicted_hi:        number | null;
+    price_at_rec:        number | null;
+    regime:              string | null;
+    recorded_at:         string;
+    actual_return_pct:   number | null;
+    was_correct:         0 | 1 | null;
+    outcome_price:       number | null;
+    outcome_date:        string | null;
+  }[];
+  summary: OpportunitySelfEvalSummary;
 };

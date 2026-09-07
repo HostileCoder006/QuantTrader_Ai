@@ -174,6 +174,79 @@ def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS idx_news_cache_key ON news_cache(symbol, cache_key)"
         )
 
+        # ── Opportunity Scanner tables ─────────────────────────────────────
+
+        # 6. Full scan results (JSON blob per scan run, for history + self-eval)
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS opportunity_scan_results (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id          TEXT    NOT NULL UNIQUE,
+                horizon          TEXT    NOT NULL,
+                risk_profile     TEXT    NOT NULL,
+                regime           TEXT,
+                scanned_at       TEXT    NOT NULL,
+                candidates_json  TEXT    NOT NULL,
+                meta_json        TEXT
+            )
+            """
+        )
+
+        # 7. Committee analysis cache — keyed by (scan_id, symbol, step)
+        #    step: "analyst_technical" | "analyst_fundamental" | ... |
+        #          "synthesis" | "debate" | "full_committee" | "full_committee_deep"
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS opportunity_committee_cache (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id     TEXT NOT NULL,
+                symbol      TEXT NOT NULL,
+                step        TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                UNIQUE(scan_id, symbol, step)
+            )
+            """
+        )
+
+        # 8. Opportunity self-evaluation — stores the final ranked rec for
+        #    later accuracy measurement once outcomes are known
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS opportunity_recommendations (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id              TEXT NOT NULL,
+                symbol               TEXT NOT NULL,
+                rank                 INTEGER NOT NULL,
+                horizon              TEXT NOT NULL,
+                risk_profile         TEXT NOT NULL,
+                opportunity_score    REAL,
+                committee_rec        TEXT,
+                committee_conviction TEXT,
+                predicted_lo         REAL,
+                predicted_hi         REAL,
+                price_at_rec         REAL,
+                regime               TEXT,
+                recorded_at          TEXT NOT NULL,
+                -- outcome fields (filled later)
+                outcome_price        REAL,
+                actual_return_pct    REAL,
+                outcome_date         TEXT,
+                was_correct          INTEGER
+            )
+            """
+        )
+
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_opp_scan_id ON opportunity_scan_results(scan_id)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_opp_cache ON opportunity_committee_cache(scan_id, symbol)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_opp_rec_symbol ON opportunity_recommendations(symbol)"
+        )
+
 
 def get_balance() -> float:
     with get_connection() as db:

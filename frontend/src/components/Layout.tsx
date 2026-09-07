@@ -6,20 +6,22 @@ import {
   LineChart,
   Radar,
   Scan,
+  Telescope,
   TestTube2,
   Wallet,
 } from "lucide-react";
 import type { Page } from "../App";
 
 const navItems: { id: Page; label: string; icon: typeof BarChart3 }[] = [
-  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "market", label: "Market", icon: LineChart },
-  { id: "scanner", label: "Scanner", icon: Scan },
-  { id: "portfolio", label: "Portfolio", icon: BriefcaseBusiness },
-  { id: "analytics", label: "Analytics", icon: Radar },
-  { id: "backtest", label: "Backtester", icon: FlaskConical },
-  { id: "journal", label: "Journal", icon: BookOpen },
-  { id: "strategylab", label: "Strategy Lab", icon: TestTube2 },
+  { id: "dashboard",     label: "Dashboard",    icon: BarChart3 },
+  { id: "market",        label: "Market",       icon: LineChart },
+  { id: "scanner",       label: "Scanner",      icon: Scan },
+  { id: "opportunities", label: "Opportunities",icon: Telescope },
+  { id: "portfolio",     label: "Portfolio",    icon: BriefcaseBusiness },
+  { id: "analytics",     label: "Analytics",    icon: Radar },
+  { id: "backtest",      label: "Backtester",   icon: FlaskConical },
+  { id: "journal",       label: "Journal",      icon: BookOpen },
+  { id: "strategylab",   label: "Strategy Lab", icon: TestTube2 },
 ];
 
 type LayoutProps = {

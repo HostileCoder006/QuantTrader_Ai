@@ -10,6 +10,7 @@ import { MarketPage } from "./pages/MarketPage";
 import { PortfolioPage } from "./pages/PortfolioPage";
 import { ScannerPage } from "./pages/ScannerPage";
 import { StrategyLabPage } from "./pages/StrategyLabPage";
+import { OpportunityScannerPage } from "./pages/OpportunityScannerPage";
 
 export type Page =
   | "dashboard"
@@ -19,7 +20,8 @@ export type Page =
   | "analytics"
   | "backtest"
   | "journal"
-  | "strategylab";
+  | "strategylab"
+  | "opportunities";
 
 // Auto-refresh interval: 5 minutes (market data)
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -93,6 +95,8 @@ function App() {
         return <JournalPage />;
       case "strategylab":
         return <StrategyLabPage />;
+      case "opportunities":
+        return <OpportunityScannerPage />;
       default:
         return null;
     }

@@ -79,16 +79,23 @@ def _calc_health_score(
     diversification_score: int,
     cash_utilization: float,
     risk_exposure: float,
+    has_holdings: bool,
 ) -> int:
     """
     Portfolio Health Score 0–100.
 
-    Components:
-      - Performance (30 pts): based on total return
+    Returns 0 immediately when there are no holdings — a fully-cash
+    portfolio has no measurable health (not good, not bad).
+
+    Components (only when holdings exist):
+      - Performance   (30 pts): based on total return
       - Diversification (30 pts): from diversification score
-      - Cash utilization (20 pts): having 10–40% cash is healthy
-      - Risk exposure (20 pts): not too concentrated in single positions
+      - Cash utilization (20 pts): 10–40 % cash is healthy
+      - Risk exposure   (20 pts): not too concentrated in one position
     """
+    if not has_holdings:
+        return 0
+
     score = 0
 
     # Performance
@@ -104,13 +111,11 @@ def _calc_health_score(
     # Diversification
     score += int(diversification_score * 0.30)
 
-    # Cash utilization: 10–40% is healthy
+    # Cash utilization: 10–40% cash alongside holdings is healthy
     if 10 <= cash_utilization <= 40:
         score += 20
-    elif cash_utilization > 90:
-        score += 8
     elif cash_utilization < 5:
-        score += 5
+        score += 5   # almost fully invested — no dry powder
     else:
         score += 14
 
@@ -128,6 +133,8 @@ def _calc_health_score(
 def get_portfolio_summary() -> dict:
     cash = get_balance()
     holdings = enrich_holdings()
+    has_holdings = len(holdings) > 0
+
     invested_value = sum(item["current_value"] for item in holdings)
     portfolio_value = cash + invested_value
     total_pl = portfolio_value - STARTING_BALANCE
@@ -143,6 +150,7 @@ def get_portfolio_summary() -> dict:
         diversification_score=diversification_score,
         cash_utilization=cash_utilization,
         risk_exposure=max_single_alloc,
+        has_holdings=has_holdings,
     )
 
     return {
@@ -155,6 +163,7 @@ def get_portfolio_summary() -> dict:
         "holdings": holdings,
         # Intelligence fields
         "health_score": health_score,
+        "no_holdings": not has_holdings,        # explicit flag for frontend
         "diversification_score": diversification_score,
         "cash_utilization": cash_utilization,
         "sector_concentration": sector_concentration,

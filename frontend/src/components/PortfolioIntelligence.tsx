@@ -91,37 +91,50 @@ export function PortfolioIntelligence() {
 
       {data && (
         <div className="mt-5 space-y-5">
-          {/* Health + Scores */}
-          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            <div className="flex flex-col items-center gap-2">
-              <HealthRing score={data.health_score} />
-              <p className="text-xs text-slate-400">Health Score</p>
+          {/* Empty portfolio state */}
+          {data.no_holdings && (
+            <div className="rounded-md border border-line bg-ink/50 p-5 text-center">
+              <p className="text-sm font-semibold text-slate-300">No Holdings</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Health score is not calculated until you hold at least one stock.
+                Use the Market page to place a paper buy order.
+              </p>
             </div>
+          )}
 
-            <div className="grid flex-1 grid-cols-2 gap-3">
-              {[
-                { label: "Diversification", value: data.diversification_score, max: 100 },
-                { label: "Cash Available", value: data.cash_utilization, max: 100, unit: "%" },
-                { label: "Holdings", value: data.holdings.length, max: 20, unit: " stocks" },
-                { label: "Max Position", value: data.max_single_allocation, max: 100, unit: "%" },
-              ].map((metric) => (
-                <div key={metric.label} className="rounded-md border border-line bg-ink p-3">
-                  <p className="text-xs text-slate-500">{metric.label}</p>
-                  <p className="number mt-1 text-base font-semibold text-white">
-                    {typeof metric.value === "number"
-                      ? Number.isInteger(metric.value)
-                        ? metric.value
-                        : metric.value.toFixed(1)
-                      : metric.value}
-                    {metric.unit ?? ""}
-                  </p>
-                </div>
-              ))}
+          {/* Health + Scores — only when holdings exist */}
+          {!data.no_holdings && (
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+              <div className="flex flex-col items-center gap-2">
+                <HealthRing score={data.health_score} />
+                <p className="text-xs text-slate-400">Health Score</p>
+              </div>
+
+              <div className="grid flex-1 grid-cols-2 gap-3">
+                {[
+                  { label: "Diversification", value: data.diversification_score, max: 100 },
+                  { label: "Cash Available", value: data.cash_utilization, max: 100, unit: "%" },
+                  { label: "Holdings", value: data.holdings.length, max: 20, unit: " stocks" },
+                  { label: "Max Position", value: data.max_single_allocation, max: 100, unit: "%" },
+                ].map((metric) => (
+                  <div key={metric.label} className="rounded-md border border-line bg-ink p-3">
+                    <p className="text-xs text-slate-500">{metric.label}</p>
+                    <p className="number mt-1 text-base font-semibold text-white">
+                      {typeof metric.value === "number"
+                        ? Number.isInteger(metric.value)
+                          ? metric.value
+                          : metric.value.toFixed(1)
+                        : metric.value}
+                      {metric.unit ?? ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Sector Concentration */}
-          {Object.keys(data.sector_concentration).length > 0 && (
+          {!data.no_holdings && Object.keys(data.sector_concentration).length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Sector Allocation

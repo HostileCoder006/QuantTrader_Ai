@@ -26,7 +26,7 @@ from .risk import get_portfolio_risk, get_stock_risk
 from .scanner import scan_market
 from .signals import generate_signal
 from .storage import execute_trade, get_transactions
-from .strategy_lab import get_available_indicators, run_custom_backtest
+from .strategy_lab import get_available_indicators, get_chart_data, run_custom_backtest
 
 api = Blueprint("api", __name__)
 
@@ -364,6 +364,29 @@ def strategy_lab_indicators():
     return jsonify(get_available_indicators())
 
 
+@api.post("/strategy-lab/chart")
+def strategy_lab_chart():
+    """
+    Return OHLCV + RSI + MACD series + BUY/SELL signal markers for the chart.
+
+    POST body (JSON):
+      symbol, period,
+      rsi_period (default 14),
+      macd_fast (default 12), macd_slow (default 26), macd_signal (default 9),
+      entry_rule, entry_value, exit_rule, exit_value, ema_fast, ema_slow
+    """
+    payload = request.get_json(force=True)
+    try:
+        symbol = str(payload.get("symbol", "RELIANCE")).upper()
+        config = {k: v for k, v in payload.items() if k != "symbol"}
+        result = get_chart_data(symbol, config)
+        return jsonify(result)
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+    except Exception as exc:
+        return error_response(f"Chart data failed: {exc}", 502)
+
+
 @api.post("/strategy-lab/run")
 def strategy_lab_run():
     """
@@ -445,3 +468,266 @@ def sentiment(symbol: str):
         return error_response(str(exc), 404)
     except Exception as exc:
         return error_response(f"Unable to analyze sentiment: {exc}", 502)
+
+# ---------------------------------------------------------------------------
+# Short-Term Opportunity Scanner
+# ---------------------------------------------------------------------------
+
+@api.post("/opportunity/scan")
+def opportunity_scan():
+    """
+    Run the short-term opportunity scan.
+
+    POST body (JSON):
+      horizon      : "1-5d" | "1-2w" | "2-4w" | "1-3m"  (default "2-4w")
+      risk_profile : "conservative" | "balanced" | "aggressive"  (default "balanced")
+      include_pattern : bool  (default true — set false for fast scan)
+
+    Returns ranked candidates list with quant scores, pattern stats, targets.
+    Does NOT call DeepSeek.  Use /opportunity/committee for AI analysis.
+    """
+    import json as _json
+    from .opportunity_scanner import run_opportunity_scan
+    from .storage import get_connection as _gc
+
+    payload = request.get_json(force=True) or {}
+    horizon         = str(payload.get("horizon", "2-4w"))
+    risk_profile    = str(payload.get("risk_profile", "balanced"))
+    include_pattern = bool(payload.get("include_pattern", True))
+
+    try:
+        result = run_opportunity_scan(
+            horizon=horizon,
+            risk_profile=risk_profile,
+            include_pattern=include_pattern,
+        )
+
+        # Persist scan result for history + self-evaluation
+        try:
+            with _gc() as db:
+                candidates_blob = _json.dumps(result.get("candidates", []))
+                meta_blob = _json.dumps({
+                    "sector_strength": result.get("sector_strength", {}),
+                    "top_for_committee": result.get("top_for_committee", []),
+                    "total_scanned": result.get("total_scanned", 0),
+                    "message": result.get("message", ""),
+                })
+                db.execute(
+                    """
+                    INSERT OR IGNORE INTO opportunity_scan_results
+                        (scan_id, horizon, risk_profile, regime, scanned_at,
+                         candidates_json, meta_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        result["scan_id"],
+                        horizon,
+                        risk_profile,
+                        result["regime"].get("regime", "NEUTRAL"),
+                        result["scanned_at"],
+                        candidates_blob,
+                        meta_blob,
+                    ),
+                )
+        except Exception:
+            pass  # persistence failure must not break the response
+
+        return jsonify(result)
+    except Exception as exc:
+        return error_response(f"Opportunity scan failed: {exc}", 502)
+
+
+@api.get("/opportunity/history")
+def opportunity_history():
+    """Return the last N scan summaries (no full candidate lists — compact)."""
+    import json as _json
+    from .storage import get_connection as _gc
+
+    limit = min(int(request.args.get("limit", 10)), 50)
+    try:
+        with _gc() as db:
+            rows = db.execute(
+                """
+                SELECT scan_id, horizon, risk_profile, regime, scanned_at
+                FROM opportunity_scan_results
+                ORDER BY id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return jsonify([dict(r) for r in rows])
+    except Exception as exc:
+        return error_response(f"History fetch failed: {exc}", 502)
+
+
+@api.post("/opportunity/committee")
+def opportunity_committee():
+    """
+    Run the AI Investment Committee on a completed scan result.
+
+    POST body (JSON):
+      scan_result : the full dict returned by /opportunity/scan
+      mode        : "quick" | "standard" | "deep"  (default "standard")
+
+    Cost per mode (approx DeepSeek API calls):
+      quick    → 1 call  (synthesis of top-3 only)
+      standard → up to 6 calls  (5 analysts × top-5 + synthesis)
+      deep     → up to 19 calls  (analysts + debate for top-3 + synthesis)
+    """
+    from .committee import run_committee
+
+    payload = request.get_json(force=True) or {}
+    scan_result = payload.get("scan_result")
+    mode = str(payload.get("mode", "standard"))
+
+    if not scan_result:
+        return error_response("scan_result is required", 400)
+    if mode not in ("quick", "standard", "deep"):
+        mode = "standard"
+
+    try:
+        result = run_committee(scan_result=scan_result, mode=mode)
+        return jsonify(result)
+    except Exception as exc:
+        return error_response(f"Committee analysis failed: {exc}", 502)
+
+
+@api.post("/opportunity/save-recommendation")
+def opportunity_save_recommendation():
+    """
+    Persist a final ranked recommendation for self-evaluation tracking.
+
+    POST body (JSON):
+      scan_id, symbol, rank, horizon, risk_profile,
+      opportunity_score, committee_rec, committee_conviction,
+      predicted_lo, predicted_hi, price_at_rec, regime
+    """
+    from .storage import get_connection as _gc
+    from datetime import datetime, timezone
+
+    payload = request.get_json(force=True) or {}
+    try:
+        with _gc() as db:
+            db.execute(
+                """
+                INSERT OR IGNORE INTO opportunity_recommendations
+                    (scan_id, symbol, rank, horizon, risk_profile,
+                     opportunity_score, committee_rec, committee_conviction,
+                     predicted_lo, predicted_hi, price_at_rec, regime, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("scan_id"),
+                    str(payload.get("symbol", "")).upper(),
+                    int(payload.get("rank", 1)),
+                    payload.get("horizon", "2-4w"),
+                    payload.get("risk_profile", "balanced"),
+                    float(payload.get("opportunity_score", 0)),
+                    payload.get("committee_rec"),
+                    payload.get("committee_conviction"),
+                    payload.get("predicted_lo"),
+                    payload.get("predicted_hi"),
+                    payload.get("price_at_rec"),
+                    payload.get("regime"),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        return jsonify({"status": "saved"}), 201
+    except Exception as exc:
+        return error_response(f"Save failed: {exc}", 502)
+
+
+@api.get("/opportunity/self-eval")
+def opportunity_self_eval():
+    """
+    Return saved recommendations with outcomes resolved where possible.
+    Only returns entries that have real recorded outcomes — no fake stats.
+    """
+    from .storage import get_connection as _gc
+    from .market import get_ohlcv_history
+    from .nifty50 import stock_by_symbol
+    import pandas as pd
+    from datetime import datetime, timezone
+
+    try:
+        with _gc() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM opportunity_recommendations
+                ORDER BY recorded_at DESC LIMIT 200
+                """
+            ).fetchall()
+            recs = [dict(r) for r in rows]
+
+        now_utc = datetime.now(timezone.utc)
+
+        for rec in recs:
+            if rec.get("actual_return_pct") is not None:
+                continue  # already resolved
+
+            horizon_days = {"1-5d": 5, "1-2w": 10, "2-4w": 20, "1-3m": 60}.get(
+                rec.get("horizon", "2-4w"), 20
+            )
+
+            try:
+                rec_dt = datetime.fromisoformat(
+                    rec["recorded_at"].replace("Z", "+00:00")
+                ).replace(tzinfo=timezone.utc)
+                days_elapsed = (now_utc - rec_dt).days
+                if days_elapsed < int(horizon_days * 1.4):
+                    continue
+
+                stock = stock_by_symbol(rec["symbol"])
+                if not stock:
+                    continue
+                df = get_ohlcv_history(stock["yf_symbol"], period="6mo")
+                if df.empty:
+                    continue
+
+                df.index = pd.DatetimeIndex(df.index).normalize()
+                rec_date = rec_dt.date()
+                future = df[df.index.date >= rec_date]  # type: ignore
+
+                if len(future) >= horizon_days + 1:
+                    entry_p = float(future["Close"].iloc[0])
+                    exit_p  = float(future["Close"].iloc[horizon_days])
+                    if entry_p > 0:
+                        ret = round(((exit_p - entry_p) / entry_p) * 100, 3)
+                        was_correct = (
+                            1 if (rec.get("committee_rec") == "BUY" and ret > 0)
+                            or (rec.get("committee_rec") == "SELL" and ret < 0)
+                            else 0
+                        )
+                        with _gc() as db:
+                            db.execute(
+                                """
+                                UPDATE opportunity_recommendations
+                                SET outcome_price=?, actual_return_pct=?,
+                                    outcome_date=date('now'), was_correct=?
+                                WHERE id=?
+                                """,
+                                (round(exit_p, 2), ret, was_correct, rec["id"]),
+                            )
+                        rec["actual_return_pct"] = ret
+                        rec["was_correct"] = was_correct
+                        rec["outcome_price"] = round(exit_p, 2)
+            except Exception:
+                pass
+
+        resolved = [r for r in recs if r.get("actual_return_pct") is not None]
+        total    = len(recs)
+        correct  = sum(1 for r in resolved if r.get("was_correct") == 1)
+
+        return jsonify({
+            "recommendations": recs,
+            "summary": {
+                "total_logged":   total,
+                "resolved":       len(resolved),
+                "accuracy_pct":   round(correct / len(resolved) * 100, 1) if resolved else None,
+                "avg_return_pct": round(
+                    sum(r["actual_return_pct"] for r in resolved) / len(resolved), 2
+                ) if resolved else None,
+                "note": "Only resolved outcomes are shown. No fake statistics.",
+            },
+        })
+    except Exception as exc:
+        return error_response(f"Self-eval failed: {exc}", 502)

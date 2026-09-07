@@ -25,10 +25,20 @@ export function PortfolioPage({ summary }: { summary: PortfolioSummary }) {
       {/* Summary KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Health Score", value: `${summary.health_score}/100`, colorClass: summary.health_score >= 70 ? "text-mint" : summary.health_score >= 45 ? "text-amber-300" : "text-red-300" },
-          { label: "Diversification", value: `${summary.diversification_score}/100`, colorClass: "text-white" },
+          {
+            label: "Health Score",
+            value: summary.no_holdings ? "No holdings" : `${summary.health_score}/100`,
+            colorClass: summary.no_holdings
+              ? "text-slate-500"
+              : summary.health_score >= 70
+              ? "text-mint"
+              : summary.health_score >= 45
+              ? "text-amber-300"
+              : "text-red-300",
+          },
+          { label: "Diversification", value: summary.no_holdings ? "—" : `${summary.diversification_score}/100`, colorClass: "text-white" },
           { label: "Cash Utilization", value: `${summary.cash_utilization.toFixed(1)}%`, colorClass: "text-white" },
-          { label: "Max Single Position", value: `${summary.max_single_allocation.toFixed(1)}%`, colorClass: summary.max_single_allocation > 40 ? "text-red-300" : "text-mint" },
+          { label: "Max Single Position", value: summary.no_holdings ? "—" : `${summary.max_single_allocation.toFixed(1)}%`, colorClass: summary.max_single_allocation > 40 ? "text-red-300" : "text-mint" },
         ].map((item) => (
           <div key={item.label} className="panel p-4">
             <p className="text-xs text-slate-400">{item.label}</p>

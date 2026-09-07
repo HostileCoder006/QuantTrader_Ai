@@ -410,3 +410,125 @@ def run_custom_backtest(symbol: str, config: dict[str, Any]) -> dict:
 
 def get_available_indicators() -> list[dict]:
     return AVAILABLE_INDICATORS
+
+
+# ── Chart data (OHLCV + indicators + signals) ────────────────────────────────
+
+def get_chart_data(symbol: str, config: dict[str, Any]) -> dict:
+    """
+    Return all data needed to render the Strategy Lab price chart with
+    RSI panel, MACD panel, and BUY/SELL signal markers.
+
+    config keys used here:
+      period        — yfinance period string (default "2y")
+      rsi_period    — RSI lookback (default 14)
+      macd_fast     — MACD fast EMA span (default 12)
+      macd_slow     — MACD slow EMA span (default 26)
+      macd_signal   — MACD signal EMA span (default 9)
+      entry_rule, entry_value, exit_rule, exit_value,
+      ema_fast, ema_slow  — same as run_custom_backtest
+
+    Returns dicts with ISO-date keys so the frontend can align all series.
+    """
+    stock = stock_by_symbol(symbol)
+    if not stock:
+        raise ValueError(f"Unknown NIFTY 50 symbol: {symbol}")
+
+    period = str(config.get("period", "2y"))
+    df = get_ohlcv_history(stock["yf_symbol"], period=period)
+
+    if df.empty or len(df) < 30:
+        raise ValueError(f"Insufficient data for {symbol} over {period}")
+
+    close = df["Close"]
+    n = len(df)
+
+    # ── RSI ──────────────────────────────────────────────────────────────────
+    rsi_period = int(config.get("rsi_period", 14))
+    rsi = _rsi_series(close, rsi_period)
+
+    # ── MACD ─────────────────────────────────────────────────────────────────
+    macd_fast   = int(config.get("macd_fast",   12))
+    macd_slow_p = int(config.get("macd_slow",   26))
+    macd_sig    = int(config.get("macd_signal",  9))
+
+    ema_f   = close.ewm(span=macd_fast,   adjust=False).mean()
+    ema_s   = close.ewm(span=macd_slow_p, adjust=False).mean()
+    macd_line   = ema_f - ema_s
+    signal_line = macd_line.ewm(span=macd_sig, adjust=False).mean()
+    histogram   = macd_line - signal_line
+
+    # ── Trade signals (entry=+1, exit=-1, 0=nothing) ─────────────────────────
+    signals = _generate_signals_from_config(df, config)
+
+    # ── Downsample if needed (keep ≤ 500 bars for the chart) ─────────────────
+    MAX_BARS = 500
+    step = max(1, n // MAX_BARS)
+    idx = df.index[::step]
+
+    def _round(v: float | None, d: int = 2) -> float | None:
+        if v is None or (isinstance(v, float) and (np.isnan(v) or np.isinf(v))):
+            return None
+        return round(float(v), d)
+
+    dates   = [str(i.date()) for i in idx]
+    opens   = [_round(df["Open"].loc[i])  for i in idx]
+    highs   = [_round(df["High"].loc[i])  for i in idx]
+    lows    = [_round(df["Low"].loc[i])   for i in idx]
+    closes  = [_round(df["Close"].loc[i]) for i in idx]
+    volumes = [int(df["Volume"].loc[i])   for i in idx]
+
+    rsi_vals  = [_round(rsi.loc[i],        1) for i in idx]
+    macd_vals = [_round(macd_line.loc[i],  4) for i in idx]
+    sig_vals  = [_round(signal_line.loc[i],4) for i in idx]
+    hist_vals = [_round(histogram.loc[i],  4) for i in idx]
+
+    # ── Signal markers — only include bars where signal fires ─────────────────
+    buy_signals  = []
+    sell_signals = []
+    for i_loc in range(0, n, step):
+        bar_idx = df.index[i_loc]
+        sig_val = int(signals.iloc[i_loc])
+        if sig_val == 1:
+            buy_signals.append({
+                "date":  str(bar_idx.date()),
+                "price": _round(float(df["Close"].iloc[i_loc])),
+            })
+        elif sig_val == -1:
+            sell_signals.append({
+                "date":  str(bar_idx.date()),
+                "price": _round(float(df["Close"].iloc[i_loc])),
+            })
+
+    return {
+        "symbol":       symbol,
+        "stock_name":   stock["name"],
+        "period":       period,
+        "bars":         len(dates),
+        "dates":        dates,
+        "ohlcv": {
+            "open":   opens,
+            "high":   highs,
+            "low":    lows,
+            "close":  closes,
+            "volume": volumes,
+        },
+        "rsi": {
+            "values": rsi_vals,
+            "period": rsi_period,
+            "ob_level": 70,
+            "os_level": 30,
+        },
+        "macd": {
+            "macd":        macd_vals,
+            "signal":      sig_vals,
+            "histogram":   hist_vals,
+            "fast":        macd_fast,
+            "slow":        macd_slow_p,
+            "signal_span": macd_sig,
+        },
+        "trade_signals": {
+            "buy":  buy_signals,
+            "sell": sell_signals,
+        },
+    }
