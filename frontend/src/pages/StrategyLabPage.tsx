@@ -26,7 +26,6 @@ import { api, formatNumber, formatPercent, trendColor } from "../lib/api";
 import { NIFTY_50_STOCKS } from "../lib/nifty50";
 import type { StrategyLabChartData, StrategyLabResult } from "../lib/types";
 
-// ── Config options ──────────────────────────────────────────────────────────
 
 const ENTRY_RULES = [
   { id: "rsi_above",        label: "RSI Above threshold",         hint: "e.g. RSI > 55 → momentum entry" },
@@ -46,7 +45,6 @@ const PERIODS = [
   { id: "5y", label: "5 Years" },
 ];
 
-// ── Small helpers ───────────────────────────────────────────────────────────
 
 function MetricCard({ label, value, sub, colorClass }: {
   label: string; value: string; sub?: string; colorClass?: string;
@@ -75,7 +73,6 @@ function Field({ id, label, value, onChange, min, max, step, hint, type = "numbe
   );
 }
 
-// ── Chart tooltip ───────────────────────────────────────────────────────────
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -91,7 +88,6 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── Signal marker dot ───────────────────────────────────────────────────────
 
 function SignalDot(props: any) {
   const { cx, cy, payload } = props;
@@ -115,7 +111,6 @@ function SignalDot(props: any) {
   return null;
 }
 
-// ── Toggle switch ───────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange, label, color = "bg-mint" }: {
   checked: boolean; onChange: (v: boolean) => void; label: string; color?: string;
@@ -138,7 +133,6 @@ function Toggle({ checked, onChange, label, color = "bg-mint" }: {
   );
 }
 
-// ── Three-panel chart ───────────────────────────────────────────────────────
 
 function IndicatorCharts({
   chartData,
@@ -385,7 +379,6 @@ function IndicatorCharts({
   );
 }
 
-// ── Main page ───────────────────────────────────────────────────────────────
 
 export function StrategyLabPage() {
   // Strategy config
@@ -427,7 +420,6 @@ export function StrategyLabPage() {
   // is stale (symbol or period changed since the last chart load).
   const lastChartConfig = useRef<string>("");
 
-  // ── Build a consistent config payload ──────────────────────────────────────
   const buildConfig = useCallback(() => ({
     symbol,
     period,
@@ -453,7 +445,6 @@ export function StrategyLabPage() {
       tradeCapital, initialCap, costPct, slippagePct,
       rsiPeriod, macdFast, macdSlow, macdSignal]);
 
-  // ── Load chart whenever symbol or period change ────────────────────────────
   const loadChart = useCallback(async (cfg: ReturnType<typeof buildConfig>) => {
     const key = `${cfg.symbol}|${cfg.period}|${cfg.entry_rule}|${cfg.entry_value}|${cfg.exit_rule}|${cfg.exit_value}|${cfg.ema_fast}|${cfg.ema_slow}|${cfg.rsi_period}|${cfg.macd_fast}|${cfg.macd_slow}|${cfg.macd_signal}`;
     if (key === lastChartConfig.current) return;
@@ -485,7 +476,6 @@ export function StrategyLabPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, period]);
 
-  // ── Run full backtest ───────────────────────────────────────────────────────
   const run = async () => {
     const cfg = buildConfig();
     setLoadingRun(true);

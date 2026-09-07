@@ -1,24 +1,3 @@
-"""
-Historical Pattern Search
---------------------------
-Finds historical OHLCV windows whose normalized indicator fingerprints
-are most similar to the *current* setup.
-
-Method:
-  1. Fetch up to 10 years of daily OHLCV for the symbol.
-  2. Build a rolling indicator matrix: RSI(14), MACD histogram,
-     price_vs_vwap_pct, price_vs_ema50_pct, volume_vs_avg_pct.
-  3. Normalize each feature to [0,1] across the full history.
-  4. Compute the current feature vector from the LAST bar.
-  5. Slide a window backward and compute Euclidean distance.
-  6. Select the closest N historical matches.
-  7. For each match, compute FORWARD returns at 5D/20D/60D
-     using only data AFTER the match date (strict no-lookahead).
-  8. Aggregate: win rates, avg/median/best/worst returns.
-
-IMPORTANT: The match window ENDS at least 60 days before the current
-bar so that forward-return windows don't overlap with the present.
-"""
 from __future__ import annotations
 
 import logging
@@ -39,8 +18,6 @@ MIN_LOOKBACK_GUARD = 65  # ensure 60D fwd window doesn't bleed into present
 # Minimum history needed for meaningful search
 MIN_HISTORY_DAYS = 252  # ~1 year
 
-
-# ── Rolling indicator builders (series, no lookahead) ──────────────────────
 
 def _rsi_series(close: pd.Series, period: int = 14) -> pd.Series:
     delta = close.diff()
@@ -111,8 +88,6 @@ def _euclidean_distance(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.sqrt(np.sum((a - b) ** 2)))
 
 
-# ── Forward return computation (strict no-lookahead) ───────────────────────
-
 def _forward_return(close: pd.Series, idx: int, horizon: int) -> float | None:
     """
     Compute percentage return horizon days AFTER idx.
@@ -126,8 +101,6 @@ def _forward_return(close: pd.Series, idx: int, horizon: int) -> float | None:
         return None
     return round(((exit_price - entry_price) / entry_price) * 100, 3)
 
-
-# ── Main search function ────────────────────────────────────────────────────
 
 def find_similar_patterns(symbol: str) -> dict:
     """

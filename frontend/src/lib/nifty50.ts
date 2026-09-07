@@ -1,4 +1,3 @@
-/** Mirror of backend nifty50.py for use in frontend dropdowns */
 export const NIFTY_50_STOCKS = [
   { symbol: "RELIANCE",   name: "Reliance Industries" },
   { symbol: "TCS",        name: "Tata Consultancy Services" },

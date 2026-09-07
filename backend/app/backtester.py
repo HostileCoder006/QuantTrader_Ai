@@ -1,15 +1,3 @@
-"""
-Backtesting Engine
-------------------
-Tests rule-based strategies against historical OHLCV data.
-All strategies are deterministic.
-
-Strategies:
-  - momentum     : Buy when RSI > 55 + EMA20 > EMA50; Sell when RSI < 40
-  - ema_crossover: Buy on EMA20 > EMA50 crossover; Sell on EMA20 < EMA50
-  - rsi_reversal : Buy when RSI < 35 (oversold bounce); Sell when RSI > 65
-  - sentiment    : Simulates a sentiment-driven momentum strategy
-"""
 from __future__ import annotations
 
 import logging

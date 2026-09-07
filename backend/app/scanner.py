@@ -1,9 +1,3 @@
-"""
-NIFTY 50 Market Scanner
------------------------
-Scans all 50 stocks and ranks them by signal strength, momentum, and volume.
-All ranking is deterministic — no AI involved.
-"""
 from __future__ import annotations
 
 import logging
@@ -27,14 +21,6 @@ def _safe_generate(symbol: str) -> dict | None:
 
 
 def scan_market() -> dict:
-    """
-    Scan all NIFTY 50 stocks in parallel and return categorised results:
-      - top_buy:      highest score stocks (Buy / Strong Buy)
-      - top_sell:     lowest score stocks  (Sell / Strong Sell)
-      - top_momentum: highest absolute daily_momentum
-      - top_volume:   highest volume_change (spikes)
-      - all_signals:  full list sorted by score descending
-    """
     signals: list[dict] = []
 
     with ThreadPoolExecutor(max_workers=10) as executor:

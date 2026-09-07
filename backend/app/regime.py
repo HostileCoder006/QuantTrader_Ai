@@ -1,21 +1,3 @@
-"""
-Market Regime Engine
---------------------
-Determines the current market regime for NIFTY 50 using:
-  - Trend   : EMA20 vs EMA50 vs EMA200 on NIFTY
-  - Momentum: RSI(14) on NIFTY
-  - Volatility: 20-day rolling std of daily returns (annualised)
-  - Breadth : advance/decline proxy via scanner data (optional)
-
-Regimes:
-  BULLISH        — sustained uptrend, low-medium volatility
-  NEUTRAL        — mixed signals, sideways market
-  BEARISH        — downtrend or below key MAs
-  HIGH_VOLATILITY— market is whipsawing regardless of direction
-  NO_TRADE       — extreme conditions where edge is absent
-
-Signal score adjustments returned with regime so generate_signal() can use them.
-"""
 from __future__ import annotations
 
 import json
@@ -31,7 +13,6 @@ from .storage import get_connection
 
 logger = logging.getLogger(__name__)
 
-# ── Regime constants ────────────────────────────────────────────────────────
 REGIME_BULLISH = "BULLISH"
 REGIME_NEUTRAL = "NEUTRAL"
 REGIME_BEARISH = "BEARISH"
@@ -47,7 +28,6 @@ _REGIME_ADJUSTMENTS: dict[str, int] = {
     REGIME_NO_TRADE: -25,
 }
 
-# ── Rolling indicator helpers ───────────────────────────────────────────────
 
 def _ema_series(close: pd.Series, span: int) -> pd.Series:
     return close.ewm(span=span, adjust=False).mean()
@@ -76,8 +56,6 @@ def _annualised_volatility(close: pd.Series, window: int = 20) -> float:
     return round(float(vol) * 100, 2)  # as percentage
 
 
-# ── Core computation ────────────────────────────────────────────────────────
-
 def _compute_regime_from_df(df: pd.DataFrame) -> dict:
     """
     Compute regime from a NIFTY OHLCV DataFrame.
@@ -96,7 +74,6 @@ def _compute_regime_from_df(df: pd.DataFrame) -> dict:
     rsi = _rsi_series(close)
     vol_20d = _annualised_volatility(close, 20)
 
-    # ── Trend score 0-3 (how many EMAs is price above) ──
     trend_score = 0
     if current_price > ema20:
         trend_score += 1
@@ -105,20 +82,16 @@ def _compute_regime_from_df(df: pd.DataFrame) -> dict:
     if ema200 is not None and current_price > ema200:
         trend_score += 1
 
-    # ── EMA alignment score ──
     ema_aligned_bullish = ema20 > ema50
     ema_aligned_bearish = ema20 < ema50
 
-    # ── Volatility regime ──
     high_vol = vol_20d > 25.0   # >25% annualised = high volatility
     extreme_vol = vol_20d > 40.0
 
-    # ── RSI zone ──
     rsi_bullish = 50 < rsi < 75
     rsi_bearish = rsi < 40
     rsi_overbought = rsi >= 75
 
-    # ── Classify regime ──
     if extreme_vol:
         regime = REGIME_NO_TRADE
     elif high_vol:
@@ -180,8 +153,6 @@ def _unavailable_regime() -> dict:
         "data_available": False,
     }
 
-
-# ── Public API ───────────────────────────────────────────────────────────────
 
 def get_market_regime(use_cache_seconds: int = 300) -> dict:
     """

@@ -18,7 +18,6 @@ def get_connection():
 
 def init_database() -> None:
     with get_connection() as db:
-        # ── Original tables ────────────────────────────────────────────────
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -56,7 +55,6 @@ def init_database() -> None:
                 (STARTING_BALANCE,),
             )
 
-        # ── New tables (safe migrations — CREATE IF NOT EXISTS) ────────────
 
         # 1. Market regime history
         db.execute(
@@ -174,7 +172,6 @@ def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS idx_news_cache_key ON news_cache(symbol, cache_key)"
         )
 
-        # ── Opportunity Scanner tables ─────────────────────────────────────
 
         # 6. Full scan results (JSON blob per scan run, for history + self-eval)
         db.execute(

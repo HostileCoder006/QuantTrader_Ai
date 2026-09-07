@@ -1,26 +1,3 @@
-"""
-Strategy Lab — Custom Backtester
----------------------------------
-Lets users configure their own strategy with:
-  - Entry rule  : indicator thresholds (RSI, EMA cross, MACD, Volume)
-  - Exit rule   : same set + holding period cap
-  - Stop loss   : % below entry price
-  - Take profit : % above entry price
-  - Position sizing: fixed capital per trade
-  - Transaction costs: brokerage + STT (default 0.05% round-trip)
-  - Slippage    : % of price (default 0.05%)
-
-Anti-lookahead:
-  - All indicator computations are on SERIES up to bar i.
-  - Signals are generated at bar i, executed at bar i+1 OPEN price.
-  - No peeking at future bars.
-
-Output:
-  - Total return, NIFTY alpha, Win rate, Sharpe, Max Drawdown
-  - Profit factor, Number of trades
-  - Equity curve (downsampled to ≤200 pts for UI)
-  - Trade log (symbol, entry date, exit date, entry price, exit price, return)
-"""
 from __future__ import annotations
 
 import logging
@@ -38,7 +15,6 @@ logger = logging.getLogger(__name__)
 TRADING_DAYS = 252
 MAX_EQUITY_CURVE_POINTS = 200
 
-# ── Available indicators & rules ────────────────────────────────────────────
 
 AVAILABLE_INDICATORS = [
     {"id": "rsi", "label": "RSI (14)", "type": "float", "typical_range": [0, 100]},
@@ -55,7 +31,6 @@ AVAILABLE_ENTRY_RULES = [
     "volume_spike_above",
 ]
 
-# ── Rolling indicator builders ───────────────────────────────────────────────
 
 def _rsi_series(close: pd.Series, period: int = 14) -> pd.Series:
     delta = close.diff()
@@ -84,8 +59,6 @@ def _volume_vs_avg_series(volume: pd.Series, window: int = 20) -> pd.Series:
     return ((volume - avg) / avg.replace(0, np.nan)) * 100
 
 
-# ── Signal generation from config ───────────────────────────────────────────
-
 def _generate_signals_from_config(df: pd.DataFrame, config: dict[str, Any]) -> pd.Series:
     """
     Generate entry (+1) and exit (-1) signals from user config.
@@ -111,7 +84,6 @@ def _generate_signals_from_config(df: pd.DataFrame, config: dict[str, Any]) -> p
     exit_rule = config.get("exit_rule", "rsi_below")
     exit_value = float(config.get("exit_value", 40))
 
-    # ── Entry conditions ──
     if entry_rule == "rsi_above":
         entry_mask = rsi > entry_value
     elif entry_rule == "rsi_below":
@@ -133,7 +105,6 @@ def _generate_signals_from_config(df: pd.DataFrame, config: dict[str, Any]) -> p
     else:
         entry_mask = pd.Series(False, index=df.index)
 
-    # ── Exit conditions ──
     if exit_rule == "rsi_above":
         exit_mask = rsi > exit_value
     elif exit_rule == "rsi_below":
@@ -159,8 +130,6 @@ def _generate_signals_from_config(df: pd.DataFrame, config: dict[str, Any]) -> p
     signals[exit_mask] = -1
     return signals
 
-
-# ── Core backtest simulation ─────────────────────────────────────────────────
 
 def _run_strategy(df: pd.DataFrame, signals: pd.Series, config: dict[str, Any]) -> dict:
     """
@@ -358,8 +327,6 @@ def _empty_result() -> dict:
     }
 
 
-# ── Public API ───────────────────────────────────────────────────────────────
-
 def run_custom_backtest(symbol: str, config: dict[str, Any]) -> dict:
     """
     Entry point for the Strategy Lab.
@@ -412,8 +379,6 @@ def get_available_indicators() -> list[dict]:
     return AVAILABLE_INDICATORS
 
 
-# ── Chart data (OHLCV + indicators + signals) ────────────────────────────────
-
 def get_chart_data(symbol: str, config: dict[str, Any]) -> dict:
     """
     Return all data needed to render the Strategy Lab price chart with
@@ -443,11 +408,9 @@ def get_chart_data(symbol: str, config: dict[str, Any]) -> dict:
     close = df["Close"]
     n = len(df)
 
-    # ── RSI ──────────────────────────────────────────────────────────────────
     rsi_period = int(config.get("rsi_period", 14))
     rsi = _rsi_series(close, rsi_period)
 
-    # ── MACD ─────────────────────────────────────────────────────────────────
     macd_fast   = int(config.get("macd_fast",   12))
     macd_slow_p = int(config.get("macd_slow",   26))
     macd_sig    = int(config.get("macd_signal",  9))
@@ -458,10 +421,8 @@ def get_chart_data(symbol: str, config: dict[str, Any]) -> dict:
     signal_line = macd_line.ewm(span=macd_sig, adjust=False).mean()
     histogram   = macd_line - signal_line
 
-    # ── Trade signals (entry=+1, exit=-1, 0=nothing) ─────────────────────────
     signals = _generate_signals_from_config(df, config)
 
-    # ── Downsample if needed (keep ≤ 500 bars for the chart) ─────────────────
     MAX_BARS = 500
     step = max(1, n // MAX_BARS)
     idx = df.index[::step]
@@ -483,7 +444,6 @@ def get_chart_data(symbol: str, config: dict[str, Any]) -> dict:
     sig_vals  = [_round(signal_line.loc[i],4) for i in idx]
     hist_vals = [_round(histogram.loc[i],  4) for i in idx]
 
-    # ── Signal markers — only include bars where signal fires ─────────────────
     buy_signals  = []
     sell_signals = []
     for i_loc in range(0, n, step):

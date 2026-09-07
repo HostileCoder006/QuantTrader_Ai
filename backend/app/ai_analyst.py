@@ -1,14 +1,3 @@
-"""
-AI Trade Analyst & Market Brief
---------------------------------
-DeepSeek V3.2 is used ONLY to:
-  1. Explain quantitative signals in plain English
-  2. Summarise market conditions
-  3. Analyse portfolio health
-  4. Generate a daily market intelligence report
-
-AI never generates signals. All signals come from signals.py.
-"""
 from __future__ import annotations
 
 import json
@@ -32,11 +21,6 @@ _HEADERS = {
 
 
 def _call_llm(system_prompt: str, user_payload: dict, timeout: int = 45) -> str:
-    """
-    Call OpenRouter DeepSeek V3.2.
-    Returns the raw content string.
-    Raises on HTTP errors.
-    """
     response = requests.post(
         _OPENROUTER_URL,
         headers={**_HEADERS, "Authorization": f"Bearer {OPENROUTER_API_KEY}"},
@@ -53,10 +37,6 @@ def _call_llm(system_prompt: str, user_payload: dict, timeout: int = 45) -> str:
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
-
-# ---------------------------------------------------------------------------
-# 1. Trade signal explanation
-# ---------------------------------------------------------------------------
 
 _SIGNAL_SYSTEM = (
     "You are a quantitative equity analyst explaining deterministic signals to retail traders. "
@@ -80,10 +60,6 @@ _SIGNAL_SCHEMA = {
 
 
 def explain_signal(signal: dict) -> dict:
-    """
-    Legacy wrapper — calls explain_signal_enriched with no extra context.
-    Kept for backward compatibility with existing /signal/<symbol>/explain route.
-    """
     return explain_signal_enriched(signal, regime=None, pattern_context=None, sentiment=None)
 
 
@@ -93,16 +69,6 @@ def explain_signal_enriched(
     pattern_context: dict | None = None,
     sentiment: dict | None = None,
 ) -> dict:
-    """
-    Full enriched explanation. DeepSeek receives ALL structured evidence:
-      - signal indicators and score breakdown
-      - market regime
-      - historical pattern statistics (if available)
-      - news sentiment (if available)
-
-    DeepSeek explains the evidence — it does NOT generate or modify the signal.
-    Falls back to deterministic demo if OPENROUTER_API_KEY is not set.
-    """
     if not OPENROUTER_API_KEY:
         return _demo_signal_explanation(signal)
 
@@ -112,7 +78,6 @@ def explain_signal_enriched(
         "stock": signal.get("symbol"),
         "company": signal.get("name"),
         "sector": signal.get("sector"),
-        # ── Quant signal ──
         "quant_signal": {
             "signal": signal.get("signal"),
             "score": signal.get("score"),
@@ -120,7 +85,6 @@ def explain_signal_enriched(
             "confidence": signal.get("confidence"),
             "score_breakdown": signal.get("score_breakdown", {}),
         },
-        # ── Technical indicators ──
         "indicators": {
             "rsi": ind.get("rsi"),
             "macd_crossover": ind.get("macd", {}).get("crossover"),
@@ -132,7 +96,6 @@ def explain_signal_enriched(
             "daily_momentum_pct": ind.get("daily_momentum"),
             "atr": ind.get("atr"),
         },
-        # ── Market regime ──
         "market_regime": {
             "regime": regime.get("regime") if regime else "DATA_UNAVAILABLE",
             "volatility_20d_pct": regime.get("volatility_20d") if regime else None,
@@ -140,7 +103,6 @@ def explain_signal_enriched(
             "score_adjustment_applied": regime.get("score_adjustment", 0) if regime else 0,
             "data_available": regime.get("data_available", False) if regime else False,
         },
-        # ── Historical patterns ──
         "historical_patterns": (
             {
                 "similar_setups": pattern_context.get("similar_count"),
@@ -152,7 +114,6 @@ def explain_signal_enriched(
             }
             if pattern_context else {"data_available": False}
         ),
-        # ── News sentiment ──
         "news_sentiment": (
             {
                 "classification": sentiment.get("classification"),
@@ -270,10 +231,6 @@ def _demo_signal_explanation(signal: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# 2. Portfolio intelligence
-# ---------------------------------------------------------------------------
-
 _PORTFOLIO_SYSTEM = (
     "You are a portfolio analyst for a paper trading simulation platform. "
     "Analyse the portfolio's composition, diversification, and risk. "
@@ -289,7 +246,6 @@ _PORTFOLIO_SCHEMA = {
 
 
 def analyse_portfolio(portfolio_data: dict) -> dict:
-    """Generates AI portfolio intelligence. Fallback to demo if no API key."""
     if not OPENROUTER_API_KEY:
         return _demo_portfolio_analysis(portfolio_data)
 
@@ -364,10 +320,6 @@ def _demo_portfolio_analysis(portfolio_data: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# 3. Daily AI Market Brief
-# ---------------------------------------------------------------------------
-
 _BRIEF_SYSTEM = (
     "You are a market intelligence analyst. "
     "Generate a concise daily market brief for NIFTY 50 based on the provided data. "
@@ -390,11 +342,9 @@ def generate_market_brief(
     top_losers: list[dict],
     top_signals: list[dict],
 ) -> dict:
-    """Generate daily AI market brief. Fallback to demo if no API key."""
     if not OPENROUTER_API_KEY:
         return _demo_market_brief(nifty_data)
 
-    # Fetch a few market headlines for context
     try:
         headlines = fetch_news("RELIANCE")[:3]
     except Exception:

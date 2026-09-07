@@ -1,16 +1,3 @@
-"""
-Quantitative Signal Engine
---------------------------
-All signals are derived from deterministic technical indicators.
-No AI or ML is involved in signal generation.
-
-Pipeline (generate_signal):
-  1. Fetch OHLCV → compute indicators
-  2. Fetch market regime → apply score adjustment
-  3. Score indicators → derive signal label
-  4. NO_TRADE override when regime is NO_TRADE and score < 40
-  5. Log recommendation to journal (non-blocking, best-effort)
-"""
 from __future__ import annotations
 
 import logging
@@ -24,10 +11,6 @@ from .nifty50 import stock_by_symbol
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Technical indicator helpers — pure functions on pd.Series / pd.DataFrame
-# ---------------------------------------------------------------------------
 
 def calc_rsi(close: pd.Series, period: int = 14) -> float:
     """Relative Strength Index (Wilder smoothing)."""
@@ -63,7 +46,6 @@ def calc_macd(close: pd.Series) -> dict:
     signal_val = round(float(signal_line.iloc[-1]), 4)
     hist_val = round(float(histogram.iloc[-1]), 4)
 
-    # Bullish crossover: histogram turned positive in last 2 bars
     if len(histogram) >= 2:
         prev_hist = float(histogram.iloc[-2])
         if prev_hist <= 0 and hist_val > 0:
@@ -137,10 +119,6 @@ def calc_daily_momentum(close: pd.Series) -> float:
         return 0.0
     return round(((float(close.iloc[-1]) - float(close.iloc[-2])) / float(close.iloc[-2])) * 100, 2)
 
-
-# ---------------------------------------------------------------------------
-# Weighted scoring system
-# ---------------------------------------------------------------------------
 
 def _score_indicators(
     current_price: float,
@@ -287,10 +265,6 @@ def _demo_indicators(symbol: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 def compute_indicators(symbol: str) -> dict:
     """
     Compute all technical indicators for a given NIFTY 50 symbol.
@@ -358,7 +332,6 @@ def generate_signal(
     stock = stock_by_symbol(symbol)
     sector = stock.get("sector", "Unknown") if stock else "Unknown"
 
-    # ── Step 1: base score from indicators ──
     score, breakdown = _score_indicators(
         current_price=indicators["current_price"],
         vwap=indicators["vwap"],
@@ -370,7 +343,6 @@ def generate_signal(
         ema50=indicators["ema50"],
     )
 
-    # ── Step 2: fetch regime (non-blocking) ──
     regime_context: dict = {}
     try:
         from .regime import get_market_regime  # lazy import avoids circular
@@ -378,13 +350,11 @@ def generate_signal(
     except Exception as exc:
         logger.warning("Regime fetch failed for %s: %s", symbol, exc)
 
-    # ── Step 3: apply regime score adjustment ──
     regime_adj = int(regime_context.get("score_adjustment", 0))
     raw_score = score
     score = max(0, min(100, score + regime_adj))
     breakdown["regime_adjustment"] = regime_adj
 
-    # ── Step 4: determine signal label ──
     regime_name = regime_context.get("regime", "NEUTRAL")
     if regime_name == "NO_TRADE" and raw_score < 40:
         signal_info = _no_trade_signal()
@@ -425,7 +395,6 @@ def generate_signal(
         "data_source": indicators.get("source", "unknown"),
     }
 
-    # ── Step 5: optional journal logging ──
     if log_to_journal:
         try:
             from .journal import log_recommendation  # lazy import

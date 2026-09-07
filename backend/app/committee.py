@@ -1,28 +1,3 @@
-"""
-AI Investment Committee
-========================
-Five specialized analysts debate the top short-term opportunities.
-Uses DeepSeek V3.2 via the existing OpenRouter integration.
-
-Cost-control pipeline
----------------------
-  All 50 stocks  →  quant filter  →  top 10
-  Top 10         →  analyst review (1 LLM call per stock, compact payload)
-  Top 5          →  full committee review (1 call per stock)
-  Top 3          →  bull/bear debate (1 call per stock)
-  All            →  synthesis (1 call, compact summary)
-
-Total API calls for a Deep analysis:
-  10 analyst reviews + 5 committee reviews + 3 debates + 1 synthesis = 19 max calls
-
-For Quick mode: only synthesis on top-3 = 1 call.
-For Standard mode: committee on top-5 + synthesis = 6 calls.
-
-No raw OHLCV or full historical datasets are sent to DeepSeek.
-Only compact calculated summaries (indicators, scores, stats).
-
-Every response is cached in the DB keyed by (symbol + scan_id).
-"""
 from __future__ import annotations
 
 import json
@@ -35,10 +10,8 @@ from .storage import get_connection
 
 logger = logging.getLogger(__name__)
 
-# ── Helpers ─────────────────────────────────────────────────────────────────
 
 def _safe_int(value: object, default: int = 50) -> int:
-    """Convert confidence/score fields from LLM safely — they can come as string or float."""
     try:
         return max(0, min(100, int(float(str(value)))))
     except (ValueError, TypeError):
@@ -46,7 +19,6 @@ def _safe_int(value: object, default: int = 50) -> int:
 
 
 def _safe_recommendation(value: object) -> str:
-    """Normalise recommendation strings from LLM to BUY/HOLD/SELL."""
     v = str(value).strip().upper()
     if "BUY" in v:
         return "BUY"
@@ -54,7 +26,6 @@ def _safe_recommendation(value: object) -> str:
         return "SELL"
     return "HOLD"
 
-# ── Analyst personas ────────────────────────────────────────────────────────
 
 ANALYSTS = {
     "technical": {
@@ -84,7 +55,6 @@ ANALYSTS = {
     },
 }
 
-# ── Schema templates ────────────────────────────────────────────────────────
 
 _ANALYST_SCHEMA = {
     "recommendation": "BUY / HOLD / SELL (for this horizon)",
@@ -115,7 +85,6 @@ _SYNTHESIS_SCHEMA = {
     "disclaimer":           "must state this is for educational paper-trading only",
 }
 
-# ── DB helpers ──────────────────────────────────────────────────────────────
 
 def _cache_get(scan_id: str, symbol: str, step: str) -> dict | None:
     try:
@@ -152,8 +121,6 @@ def _cache_set(scan_id: str, symbol: str, step: str, result: dict) -> None:
     except Exception as exc:
         logger.debug("Cache write failed: %s", exc)
 
-
-# ── Compact payload builder ─────────────────────────────────────────────────
 
 def _build_stock_summary(candidate: dict, regime: dict) -> dict:
     """
@@ -210,8 +177,6 @@ def _build_stock_summary(candidate: dict, regime: dict) -> dict:
     }
 
 
-# ── Analyst review ──────────────────────────────────────────────────────────
-
 def _analyst_review(
     analyst_key: str,
     stock_summary: dict,
@@ -261,8 +226,6 @@ def _analyst_review(
     _cache_set(scan_id, symbol, f"analyst_{analyst_key}", result)
     return result
 
-
-# ── Committee review (all 5 analysts + synthesis) ──────────────────────────
 
 def _committee_synthesis(
     symbol: str,
@@ -393,8 +356,6 @@ def _bull_bear_debate(
     _cache_set(scan_id, symbol, "debate", result)
     return result
 
-
-# ── Mode-specific pipelines ─────────────────────────────────────────────────
 
 def run_committee_quick(candidates: list[dict], scan_id: str, regime: dict) -> dict:
     """
@@ -601,19 +562,10 @@ def run_committee_deep(
     return results
 
 
-# ── Main entry point ────────────────────────────────────────────────────────
-
 def run_committee(
     scan_result: dict,
     mode: str = "standard",
 ) -> dict:
-    """
-    Entry point for routes.py.
-
-    mode: "quick" | "standard" | "deep"
-
-    Returns enriched result with committee analysis appended.
-    """
     candidates    = scan_result.get("candidates", [])
     scan_id       = scan_result.get("scan_id", "unknown")
     regime        = scan_result.get("regime", {})
@@ -644,8 +596,6 @@ def run_committee(
         "committee_mode": mode,
     }
 
-
-# ── Demo fallbacks (no API key) ─────────────────────────────────────────────
 
 def _demo_analyst_review(analyst_key: str, stock_summary: dict) -> dict:
     analyst = ANALYSTS[analyst_key]

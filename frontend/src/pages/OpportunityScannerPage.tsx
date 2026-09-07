@@ -40,7 +40,6 @@ import type {
   RiskProfile,
 } from "../lib/types";
 
-// ── Config constants ─────────────────────────────────────────────────────────
 
 const HORIZONS: { id: OpportunityHorizon; label: string; desc: string }[] = [
   { id: "1-5d",  label: "1–5 Days",    desc: "Ultra short-term momentum plays" },
@@ -69,7 +68,6 @@ const ANALYST_COLORS: Record<string, string> = {
   contrarian:  "text-red-300",
 };
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
 
 function scoreColor(score: number) {
   if (score >= 75) return "text-emerald-300";
@@ -103,7 +101,6 @@ function riskLabelColor(r: string) {
   return "text-red-300";
 }
 
-// ── Regime badge ──────────────────────────────────────────────────────────────
 
 function RegimeBadge({ regime }: { regime: string }) {
   const map: Record<string, string> = {
@@ -120,7 +117,6 @@ function RegimeBadge({ regime }: { regime: string }) {
   );
 }
 
-// ── Factor score bar ──────────────────────────────────────────────────────────
 
 function FactorBar({ label, score }: { label: string; score: number }) {
   const color = score >= 70 ? "bg-mint" : score >= 50 ? "bg-amber-400" : "bg-red-400";
@@ -135,7 +131,6 @@ function FactorBar({ label, score }: { label: string; score: number }) {
   );
 }
 
-// ── Historical pattern card ───────────────────────────────────────────────────
 
 function PatternCard({ pattern, horizonLabel }: {
   pattern: OpportunityCandidate["pattern"];
@@ -192,7 +187,6 @@ function PatternCard({ pattern, horizonLabel }: {
   );
 }
 
-// ── Candidate detail panel ────────────────────────────────────────────────────
 
 function CandidateDetail({
   candidate,
@@ -484,7 +478,6 @@ function CandidateDetail({
   );
 }
 
-// ── Candidate card (grid item) ────────────────────────────────────────────────
 
 function CandidateCard({
   candidate,
@@ -588,7 +581,6 @@ function CandidateCard({
   );
 }
 
-// ── Sector strength chart ─────────────────────────────────────────────────────
 
 function SectorChart({ strength }: { strength: Record<string, number> }) {
   const data = Object.entries(strength)
@@ -617,7 +609,6 @@ function SectorChart({ strength }: { strength: Record<string, number> }) {
   );
 }
 
-// ── Quick committee results banner ────────────────────────────────────────────
 
 function QuickCommitteeBanner({ result }: { result: QuickCommitteeResult }) {
   return (
@@ -644,7 +635,6 @@ function QuickCommitteeBanner({ result }: { result: QuickCommitteeResult }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 
 export function OpportunityScannerPage() {
   const [horizon,      setHorizon]      = useState<OpportunityHorizon>("2-4w");
@@ -663,7 +653,6 @@ export function OpportunityScannerPage() {
 
   const horizonLabel = HORIZONS.find(h => h.id === horizon)?.label ?? horizon;
 
-  // ── Scan ──────────────────────────────────────────────────────────────────
   const runScan = useCallback(async () => {
     setScanLoading(true);
     setScanError("");
@@ -678,7 +667,6 @@ export function OpportunityScannerPage() {
     }
   }, [horizon, riskProfile, includePattern]);
 
-  // ── Committee ─────────────────────────────────────────────────────────────
   const runCommittee = useCallback(async () => {
     if (!scanResult) return;
     setCommitteeLoading(true);
@@ -687,7 +675,6 @@ export function OpportunityScannerPage() {
       const result = await api.opportunityCommittee({ scan_result: scanResult, mode: committeeMode });
       setCommitteeResult(result);
 
-      // Save top recommendations for self-evaluation
       const committeeSrc = Array.isArray(result.committee) ? result.committee : [];
       for (const item of committeeSrc.slice(0, 5) as CommitteeStockResult[]) {
         const cand = scanResult.candidates.find(c => c.symbol === item.symbol);
@@ -716,7 +703,6 @@ export function OpportunityScannerPage() {
     }
   }, [scanResult, committeeMode]);
 
-  // ── Committee lookup for a given symbol ──────────────────────────────────
   const getCommitteeForSymbol = (symbol: string): CommitteeStockResult | null => {
     if (!committeeResult) return null;
     const c = committeeResult.committee;

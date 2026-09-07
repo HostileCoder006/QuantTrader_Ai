@@ -1,16 +1,3 @@
-"""
-Risk Analytics Engine
----------------------
-Calculates portfolio risk metrics:
-  - Volatility (annualised)
-  - Sharpe Ratio
-  - Sortino Ratio
-  - Maximum Drawdown
-  - Beta vs NIFTY 50
-  - Risk Score (0–100)
-
-All calculations are deterministic.
-"""
 from __future__ import annotations
 
 import logging

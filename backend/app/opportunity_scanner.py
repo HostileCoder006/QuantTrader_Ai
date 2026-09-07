@@ -1,35 +1,3 @@
-"""
-Short-Term Opportunity Scanner
-================================
-Purely deterministic quantitative engine — no AI involved here.
-Ranks the NIFTY 50 by a composite Opportunity Score tailored to the
-user's horizon and risk profile.
-
-Pipeline
---------
-1.  Fetch regime (cached) → sets universe-wide regime context.
-2.  Scan all 50 stocks in parallel (re-uses existing compute_indicators).
-3.  Score each stock on 8 quantitative factors (0-100).
-4.  Apply horizon-specific weights.
-5.  Apply risk-profile filter / penalty.
-6.  Add historical pattern evidence for top-30 (re-uses find_similar_patterns
-    but with a lightweight 2-year fetch instead of 10-year for speed).
-7.  Return top-30 ranked candidates with full quant detail.
-8.  Separately return top-10 for committee analysis (called by routes).
-
-Horizon IDs
------------
-  "1-5d"    1–5 trading days
-  "1-2w"    1–2 weeks (~5–10 days)
-  "2-4w"    2–4 weeks (~10–20 days)
-  "1-3m"    1–3 months (~20–60 days)
-
-Risk Profiles
--------------
-  "conservative"   Low volatility, high RS, positive regime only
-  "balanced"       Default — no strong filter
-  "aggressive"     Higher scores to volatile momentum plays
-"""
 from __future__ import annotations
 
 import logging
@@ -55,7 +23,6 @@ from .signals import (
 
 logger = logging.getLogger(__name__)
 
-# ── Horizon config ─────────────────────────────────────────────────────────
 
 HORIZONS: dict[str, dict] = {
     "1-5d": {
@@ -120,7 +87,6 @@ HORIZONS: dict[str, dict] = {
     },
 }
 
-# ── Indicator series helpers (for sector-strength breadth) ─────────────────
 
 def _rsi_series(close: pd.Series, period: int = 14) -> pd.Series:
     delta = close.diff()
@@ -135,8 +101,6 @@ def _rsi_series(close: pd.Series, period: int = 14) -> pd.Series:
 def _ema_series(close: pd.Series, span: int) -> pd.Series:
     return close.ewm(span=span, adjust=False).mean()
 
-
-# ── Factor scorers (0–100 each) ─────────────────────────────────────────────
 
 def _score_momentum(daily_mom: float, atr_pct: float) -> float:
     """Score based on recent price momentum normalised by ATR."""
@@ -247,8 +211,6 @@ def _score_sector(sector: str, sector_strength: dict[str, float]) -> float:
     return round(min(100, max(0, strength)), 1)
 
 
-# ── Sector strength computation ─────────────────────────────────────────────
-
 def _compute_sector_strength(all_indicators: list[dict]) -> dict[str, float]:
     """
     Average the raw quant score (0-100) for each sector using the
@@ -261,8 +223,6 @@ def _compute_sector_strength(all_indicators: list[dict]) -> dict[str, float]:
         sector_scores.setdefault(sector, []).append(score)
     return {s: round(float(np.mean(v)), 1) for s, v in sector_scores.items()}
 
-
-# ── Per-stock opportunity score ─────────────────────────────────────────────
 
 def _score_stock(
     indicators: dict,
@@ -303,7 +263,6 @@ def _score_stock(
         factors[k] * weights.get(k, 0.0) for k in factors
     )
 
-    # ── Regime adjustment ──────────────────────────────────────────────────
     regime_name = regime.get("regime", "NEUTRAL")
     if regime_name == "BULLISH":
         raw_opp_score = min(100, raw_opp_score * 1.08)
@@ -314,7 +273,6 @@ def _score_stock(
     elif regime_name == "NO_TRADE":
         raw_opp_score = raw_opp_score * 0.70
 
-    # ── Risk-profile adjustment ────────────────────────────────────────────
     if risk_profile == "conservative":
         # Penalise high ATR stocks and oversold RSI
         if atr_pct > 3.0:
@@ -331,7 +289,6 @@ def _score_stock(
 
     opp_score = round(min(100, max(0, raw_opp_score)), 1)
 
-    # ── ATR-based targets ──────────────────────────────────────────────────
     entry = price
     target = round(price + 2.0 * atr, 2)
     stop_loss = round(price - 1.5 * atr, 2)
@@ -348,8 +305,6 @@ def _score_stock(
         "atr_pct": round(atr_pct, 2),
     }
 
-
-# ── Historical environment analysis (lightweight version) ──────────────────
 
 def _pattern_analysis_fast(
     symbol: str,
@@ -464,8 +419,6 @@ def _pattern_analysis_fast(
     }
 
 
-# ── Risk classification ─────────────────────────────────────────────────────
-
 def _risk_label(atr_pct: float, regime: str, rsi: float) -> str:
     if regime in ("HIGH_VOLATILITY", "NO_TRADE") or atr_pct > 4.0 or rsi > 75:
         return "High"
@@ -503,8 +456,6 @@ def _estimated_return_range(
     return lo, hi
 
 
-# ── Confidence from quant factors ──────────────────────────────────────────
-
 def _quant_confidence(opp_score: float, regime: str, pattern_stat: dict) -> int:
     """0–100 confidence score from quant evidence."""
     base = opp_score
@@ -522,8 +473,6 @@ def _quant_confidence(opp_score: float, regime: str, pattern_stat: dict) -> int:
 
     return round(base)
 
-
-# ── Main scan function ──────────────────────────────────────────────────────
 
 def run_opportunity_scan(
     horizon: str = "2-4w",
@@ -566,7 +515,6 @@ def run_opportunity_scan(
     weights = hz["weights"]
     scan_id = f"{horizon}_{risk_profile}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
-    # ── Step 1: Regime ──────────────────────────────────────────────────────
     try:
         regime = get_market_regime(use_cache_seconds=300)
     except Exception as exc:
@@ -575,7 +523,6 @@ def run_opportunity_scan(
 
     regime_name = regime.get("regime", "NEUTRAL")
 
-    # ── Step 2: Scan all 50 in parallel ────────────────────────────────────
     raw_indicators: list[dict] = []
 
     def _fetch_stock(stock: dict) -> dict | None:
@@ -608,10 +555,8 @@ def run_opportunity_scan(
             if result is not None:
                 raw_indicators.append(result)
 
-    # ── Step 3: Sector strength ─────────────────────────────────────────────
     sector_strength = _compute_sector_strength(raw_indicators)
 
-    # ── Step 4: Score every stock ───────────────────────────────────────────
     scored: list[dict] = []
     for ind in raw_indicators:
         try:
@@ -632,7 +577,6 @@ def run_opportunity_scan(
     # Sort by opportunity score descending
     scored.sort(key=lambda x: x["opportunity_score"], reverse=True)
 
-    # ── Step 5: Apply risk profile hard filters ─────────────────────────────
     if risk_profile == "conservative":
         # Require price above EMA50 and not in NO_TRADE regime
         scored = [
@@ -647,7 +591,6 @@ def run_opportunity_scan(
     # Keep top N
     top_quant = scored[:top_n_quant]
 
-    # ── Step 6: Pattern analysis for top-10 ────────────────────────────────
     top_10_symbols = [s["symbol"] for s in top_quant[:top_n_pattern]]
 
     if include_pattern:
@@ -712,11 +655,9 @@ def run_opportunity_scan(
             stock["estimated_return_lo"] = lo
             stock["estimated_return_hi"] = hi
 
-    # ── Step 7: Clean up internal keys before returning ────────────────────
     for stock in top_quant:
         stock.pop("_raw_score", None)
 
-    # ── Rank labels ────────────────────────────────────────────────────────
     for i, stock in enumerate(top_quant):
         stock["rank"] = i + 1
 

@@ -1,13 +1,3 @@
-"""
-Recommendation Journal
------------------------
-Stores every BUY/SELL/HOLD/NO_TRADE recommendation with its full context,
-then automatically tracks forward outcomes and computes performance stats.
-
-Every time generate_signal() fires for a stock, we log the recommendation.
-A background resolution job (called on GET /api/journal) fills in the
-actual price outcomes as they become available.
-"""
 from __future__ import annotations
 
 import json
@@ -25,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 OUTCOME_HORIZONS = [1, 5, 20, 60]  # trading days
 
-
-# ── Logging ──────────────────────────────────────────────────────────────────
 
 def log_recommendation(signal: dict, regime: dict | None = None, sentiment: dict | None = None) -> int:
     """
@@ -83,8 +71,6 @@ def log_recommendation(signal: dict, regime: dict | None = None, sentiment: dict
         )
         return cursor.lastrowid
 
-
-# ── Outcome resolution ───────────────────────────────────────────────────────
 
 def _get_price_n_days_after(symbol: str, base_timestamp: str, n_days: int) -> float | None:
     """
@@ -146,7 +132,6 @@ def _get_nifty_return_n_days(base_timestamp: str, n_days: int) -> float | None:
         return round(((exit_ - entry) / entry) * 100, 3)
     except (IndexError, ValueError):
         return None
-
 
 
 def resolve_pending_outcomes() -> int:
@@ -229,8 +214,6 @@ def resolve_pending_outcomes() -> int:
 
     return filled
 
-
-# ── Read operations ──────────────────────────────────────────────────────────
 
 def get_journal(limit: int = 200) -> list[dict]:
     """Return journal entries with any available outcomes joined in."""

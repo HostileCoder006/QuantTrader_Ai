@@ -1,13 +1,3 @@
-"""
-News → Price Reaction Tracker
-------------------------------
-1. Caches sentiment analysis so the same headlines are never re-sent to DeepSeek.
-2. Stores each news event with the price at that time.
-3. Resolves 1D/5D/20D price reactions after the fact.
-4. Aggregates: sentiment trends, news volume, sentiment/price divergence.
-
-Cache key = SHA-256 of the sorted headline strings for a symbol.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -25,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 REACTION_HORIZONS = [1, 5, 20]  # trading days
 
-
-# ── Cache helpers ─────────────────────────────────────────────────────────────
 
 def _headlines_cache_key(symbol: str, headlines: list[dict]) -> str:
     text = symbol + "|".join(sorted(h.get("title", "") for h in headlines))
@@ -72,8 +60,6 @@ def store_sentiment_cache(symbol: str, headlines: list[dict], sentiment: dict) -
         logger.warning("Cache write failed: %s", exc)
 
 
-# ── Reaction recording ────────────────────────────────────────────────────────
-
 def record_news_reaction(
     symbol: str,
     headline: str,
@@ -116,8 +102,6 @@ def record_news_reaction(
         logger.warning("Record news reaction failed: %s", exc)
         return None
 
-
-# ── Reaction resolution ───────────────────────────────────────────────────────
 
 def resolve_pending_reactions() -> int:
     """
@@ -198,8 +182,6 @@ def resolve_pending_reactions() -> int:
 
     return filled
 
-
-# ── Analytics ──────────────────────────────────────────────────────────────────
 
 def get_reaction_stats(symbol: str) -> dict:
     """

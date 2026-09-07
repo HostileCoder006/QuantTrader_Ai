@@ -4,7 +4,6 @@ import { formatNumber } from "../lib/api";
 import type { RiskMetrics } from "../lib/types";
 
 type RiskPanelProps = {
-  /** If provided, fetches stock-level risk. If null, fetches portfolio risk. */
   fetchFn: () => Promise<RiskMetrics>;
   title?: string;
 };

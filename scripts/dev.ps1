@@ -15,44 +15,41 @@ if (-not (Test-Path (Join-Path $frontend "node_modules"))) {
   exit 1
 }
 
-Write-Host "Starting QuantTrader AI..." -ForegroundColor Cyan
-Write-Host "Backend:  http://127.0.0.1:5000" -ForegroundColor DarkGray
-Write-Host "Frontend: http://127.0.0.1:5173" -ForegroundColor DarkGray
-Write-Host "Press Ctrl+C to stop both servers." -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  QuantTrader AI - Market Intelligence Platform" -ForegroundColor Cyan
+Write-Host "  Backend:  http://127.0.0.1:5000" -ForegroundColor DarkGray
+Write-Host "  Frontend: http://127.0.0.1:5173" -ForegroundColor DarkGray
+Write-Host "  Press Ctrl+C to stop both servers." -ForegroundColor DarkGray
+Write-Host ""
 
-$backendJob = Start-Job -Name "quanttrader-backend" -ScriptBlock {
-  param($backendPath, $pythonPath)
-  Set-Location $backendPath
-  & $pythonPath app.py
-} -ArgumentList $backend, $python
+$backendProc = Start-Process -FilePath $python `
+  -ArgumentList "app.py" `
+  -WorkingDirectory $backend `
+  -PassThru -NoNewWindow
 
-$frontendJob = Start-Job -Name "quanttrader-frontend" -ScriptBlock {
-  param($frontendPath)
-  Set-Location $frontendPath
-  & npm.cmd run dev -- --port 5173
-} -ArgumentList $frontend
+$frontendProc = Start-Process -FilePath "npm.cmd" `
+  -ArgumentList "run", "dev", "--", "--port", "5173" `
+  -WorkingDirectory $frontend `
+  -PassThru -NoNewWindow
+
+Write-Host "  Backend PID:  $($backendProc.Id)" -ForegroundColor DarkGray
+Write-Host "  Frontend PID: $($frontendProc.Id)" -ForegroundColor DarkGray
+Write-Host ""
 
 try {
   while ($true) {
-    Receive-Job $backendJob
-    Receive-Job $frontendJob
-
-    if ($backendJob.State -ne "Running") {
-      Receive-Job $backendJob
-      throw "Backend server stopped unexpectedly."
+    if ($backendProc.HasExited) {
+      throw "Backend stopped unexpectedly (exit $($backendProc.ExitCode)). Is port 5000 in use?"
     }
-
-    if ($frontendJob.State -ne "Running") {
-      Receive-Job $frontendJob
-      throw "Frontend server stopped unexpectedly."
+    if ($frontendProc.HasExited) {
+      throw "Frontend stopped unexpectedly (exit $($frontendProc.ExitCode)). Is port 5173 in use?"
     }
-
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 2
   }
 }
 finally {
   Write-Host ""
   Write-Host "Stopping QuantTrader AI..." -ForegroundColor Cyan
-  Stop-Job $backendJob, $frontendJob -ErrorAction SilentlyContinue
-  Remove-Job $backendJob, $frontendJob -Force -ErrorAction SilentlyContinue
+  if (-not $backendProc.HasExited)  { $backendProc.Kill()  }
+  if (-not $frontendProc.HasExited) { $frontendProc.Kill() }
 }

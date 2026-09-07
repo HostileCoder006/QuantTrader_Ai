@@ -1,4 +1,3 @@
-// ─── Existing types ────────────────────────────────────────────────────────
 
 export type Stock = {
   symbol: string;
@@ -73,7 +72,6 @@ export type Analytics = {
   transactions: Transaction[];
 };
 
-// ─── New types ─────────────────────────────────────────────────────────────
 
 export type NiftyIndex = {
   value: number;
@@ -194,7 +192,6 @@ export type MarketBrief = {
   nifty: NiftyIndex;
 };
 
-// ─── Market Regime ─────────────────────────────────────────────────────────
 
 export type RegimeName =
   | "BULLISH"
@@ -228,7 +225,6 @@ export type RegimeHistoryEntry = {
   score_adjustment: number;
 };
 
-// ─── Historical Pattern Search ─────────────────────────────────────────────
 
 export type HorizonStats = {
   data_available: boolean;
@@ -272,7 +268,6 @@ export type PatternSearchResult = {
   message: string;
 };
 
-// ─── Recommendation Journal ────────────────────────────────────────────────
 
 export type JournalOutcome = {
   price: number;
@@ -327,7 +322,6 @@ export type JournalStats = {
   max_drawdown_5d: number;
 };
 
-// ─── News → Price Reactions ────────────────────────────────────────────────
 
 export type SentimentTrendPoint = {
   date: string;
@@ -358,7 +352,6 @@ export type NewsReactionStats = {
   message: string;
 };
 
-// ─── Strategy Lab ──────────────────────────────────────────────────────────
 
 export type StrategyLabChartData = {
   symbol: string;
@@ -423,7 +416,6 @@ export type StrategyLabResult = {
   config_used: Record<string, unknown>;
 };
 
-// ─── Extended Signal (with regime context) ─────────────────────────────────
 
 export type RegimeContext = {
   regime: RegimeName;
@@ -457,7 +449,6 @@ export type ScannerResultWithRegime = ScannerResult & {
   regime: MarketRegime | null;
 };
 
-// ─── Short-Term Opportunity Scanner ────────────────────────────────────────
 
 export type OpportunityHorizon = "1-5d" | "1-2w" | "2-4w" | "1-3m";
 export type RiskProfile = "conservative" | "balanced" | "aggressive";
@@ -626,7 +617,6 @@ export type OpportunitySelfEvalSummary = {
   resolved:       number;
   accuracy_pct:   number | null;
   avg_return_pct: number | null;
-  note:           string;
 };
 
 export type OpportunitySelfEval = {
